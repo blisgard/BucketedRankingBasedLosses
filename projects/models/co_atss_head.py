@@ -4,10 +4,10 @@ from mmcv.cnn import ConvModule, Scale
 from mmcv.runner import force_fp32
 
 from mmdet.core import (anchor_inside_flags, build_assigner, build_sampler,
-                        images_to_levels, multi_apply, reduce_mean, unmap)
+                        images_to_levels, multi_apply, reduce_mean, unmap, vectorize_labels, bbox_overlaps)
 from mmdet.models.builder import HEADS, build_loss
 from mmdet.models.dense_heads.anchor_head import AnchorHead
-
+from mmdet.models.losses import ranking_losses
 
 @HEADS.register_module()
 class CoATSSHead(AnchorHead):
@@ -31,6 +31,10 @@ class CoATSSHead(AnchorHead):
                      type='CrossEntropyLoss',
                      use_sigmoid=True,
                      loss_weight=1.0),
+                rank_loss_type = dict(
+                     type='',
+                     use_sigmoid=True,
+                     loss_weight=1.0),
                  init_cfg=dict(
                      type='Normal',
                      layer='Conv2d',
@@ -50,7 +54,6 @@ class CoATSSHead(AnchorHead):
             reg_decoded_bbox=reg_decoded_bbox,
             init_cfg=init_cfg,
             **kwargs)
-
         self.sampling = False
         if self.train_cfg:
             self.assigner = build_assigner(self.train_cfg.assigner)
@@ -58,6 +61,10 @@ class CoATSSHead(AnchorHead):
             sampler_cfg = dict(type='PseudoSampler')
             self.sampler = build_sampler(sampler_cfg, context=self)
         self.loss_centerness = build_loss(loss_centerness)
+        if rank_loss_type['type'] != '':
+            self.loss_rank = build_loss(rank_loss_type)
+        self.rank_loss_type = rank_loss_type
+
 
 
     def _init_layers(self):
@@ -145,12 +152,13 @@ class CoATSSHead(AnchorHead):
         return cls_score, bbox_pred, centerness
 
     def loss_single(self, anchors, cls_score, bbox_pred, centerness, labels,
-                    label_weights, bbox_targets, img_metas, num_total_samples):
+                    label_weights, bbox_targets, img_metas, num_total_samples, flat_labels, flat_preds):
         """Compute loss of a single scale level.
 
         Args:
             cls_score (Tensor): Box scores for each scale level
                 Has shape (N, num_anchors * num_classes, H, W).
+                
             bbox_pred (Tensor): Box energies / deltas for each scale
                 level with shape (N, num_anchors * 4, H, W).
             anchors (Tensor): Box reference for each scale level with shape
@@ -167,7 +175,9 @@ class CoATSSHead(AnchorHead):
         Returns:
             dict[str, Tensor]: A dictionary of loss components.
         """
+
         anchors = anchors.reshape(-1, 4)
+        temp_cls_score = cls_score
         cls_score = cls_score.permute(0, 2, 3, 1).reshape(
             -1, self.cls_out_channels).contiguous()
         bbox_pred = bbox_pred.permute(0, 2, 3, 1).reshape(-1, 4)
@@ -176,45 +186,96 @@ class CoATSSHead(AnchorHead):
         labels = labels.reshape(-1)
         label_weights = label_weights.reshape(-1)
 
+        
+            
         # classification loss
+        '''
         loss_cls = self.loss_cls(
             cls_score, labels, label_weights, avg_factor=num_total_samples)
+        '''
+        if self.rank_loss_type['type'] == 'BucketedRankSort' or self.rank_loss_type['type'] == 'RankSort':
+            #ranking_loss, sorting_loss = self.loss_cls.apply(flat_preds,flat_labels, 0.5)
 
-        # FG cat_id: [0, num_classes -1], BG cat_id: num_classes
-        bg_class_ind = self.num_classes
-        pos_inds = ((labels >= 0)
-                    & (labels < bg_class_ind)).nonzero().squeeze(1)
+            ranking_loss, sorting_loss = self.loss_rank.apply(flat_preds, flat_labels, 0.5)
 
-        if len(pos_inds) > 0:
-            pos_bbox_targets = bbox_targets[pos_inds]
-            pos_bbox_pred = bbox_pred[pos_inds]
-            pos_anchors = anchors[pos_inds]
-            pos_centerness = centerness[pos_inds]
 
-            centerness_targets = self.centerness_target(
-                pos_anchors, pos_bbox_targets)
-            pos_decode_bbox_pred = self.bbox_coder.decode(
-                pos_anchors, pos_bbox_pred)
+            # FG cat_id: [0, num_classes -1], BG cat_id: num_classes
+            bg_class_ind = self.num_classes
+            pos_inds = ((labels >= 0)
+                        & (labels < bg_class_ind)).nonzero().squeeze(1)
 
-            # regression loss
-            loss_bbox = self.loss_bbox(
-                pos_decode_bbox_pred,
-                pos_bbox_targets,
-                weight=centerness_targets,
-                avg_factor=1.0)
+            if len(pos_inds) > 0:
+                pos_bbox_targets = bbox_targets[pos_inds]
+                pos_bbox_pred = bbox_pred[pos_inds]
+                pos_anchors = anchors[pos_inds]
+                pos_centerness = centerness[pos_inds]
 
-            # centerness loss
-            loss_centerness = self.loss_centerness(
-                pos_centerness,
-                centerness_targets,
-                avg_factor=num_total_samples)
+                centerness_targets = self.centerness_target(
+                    pos_anchors, pos_bbox_targets)
+                pos_decode_bbox_pred = self.bbox_coder.decode(
+                    pos_anchors, pos_bbox_pred)
 
+
+
+                # regression loss
+                loss_bbox = self.loss_bbox(
+                    pos_decode_bbox_pred,
+                    pos_bbox_targets,
+                    weight=centerness_targets,
+                    avg_factor=1.0)
+
+                # centerness loss
+                loss_centerness = self.loss_centerness(
+                    pos_centerness,
+                    centerness_targets,
+                    avg_factor=num_total_samples)
+                
+
+            else:
+                loss_bbox = bbox_pred.sum() * 0
+                loss_centerness = centerness.sum() * 0
+                centerness_targets = bbox_targets.new_tensor(0.)
+                
+
+            return ranking_loss, sorting_loss, loss_bbox, loss_centerness, centerness_targets.sum()
         else:
-            loss_bbox = bbox_pred.sum() * 0
-            loss_centerness = centerness.sum() * 0
-            centerness_targets = bbox_targets.new_tensor(0.)
+            loss_cls = self.loss_cls(cls_score, labels, label_weights, avg_factor=num_total_samples)
+            bg_class_ind = self.num_classes
+            pos_inds = ((labels >= 0)
+                        & (labels < bg_class_ind)).nonzero().squeeze(1)
 
-        return loss_cls, loss_bbox, loss_centerness, centerness_targets.sum()
+            if len(pos_inds) > 0:
+                pos_bbox_targets = bbox_targets[pos_inds]
+                pos_bbox_pred = bbox_pred[pos_inds]
+                pos_anchors = anchors[pos_inds]
+                pos_centerness = centerness[pos_inds]
+
+                centerness_targets = self.centerness_target(
+                    pos_anchors, pos_bbox_targets)
+                pos_decode_bbox_pred = self.bbox_coder.decode(
+                    pos_anchors, pos_bbox_pred)
+
+                # regression loss
+                loss_bbox = self.loss_bbox(
+                    pos_decode_bbox_pred,
+                    pos_bbox_targets,
+                    weight=centerness_targets,
+                    avg_factor=1.0)
+
+                # centerness loss
+                loss_centerness = self.loss_centerness(
+                    pos_centerness,
+                    centerness_targets,
+                    avg_factor=num_total_samples)
+                
+
+            else:
+                loss_bbox = bbox_pred.sum() * 0
+                loss_centerness = centerness.sum() * 0
+                centerness_targets = bbox_targets.new_tensor(0.)
+                
+
+            return loss_cls, loss_bbox, loss_centerness, centerness_targets.sum()
 
     @force_fp32(apply_to=('cls_scores', 'bbox_preds', 'centernesses'))
     def loss(self,
@@ -272,7 +333,72 @@ class CoATSSHead(AnchorHead):
                          device=device)).item()
         num_total_samples = max(num_total_samples, 1.0)
         new_img_metas = [img_metas for _ in range(len(anchor_list))]
-        losses_cls, losses_bbox, loss_centerness,\
+
+
+        all_anchors = []
+        all_labels = []
+        all_label_weights = []
+        all_cls_scores = []
+        all_bbox_targets = []
+        all_bbox_preds = []
+        for anc, labels, label_weights, cls_score, bbox_targets, bbox_pred in zip(anchor_list, labels_list,
+                                                                                  label_weights_list, cls_scores,
+                                                                                  bbox_targets_list, bbox_preds):
+            all_anchors.append(anc.reshape(-1, 4))
+            all_labels.append(labels.reshape(-1))
+            all_label_weights.append(label_weights.reshape(-1))
+            all_cls_scores.append(cls_score.permute(0, 2, 3, 1).reshape(-1, self.cls_out_channels))
+
+            all_bbox_targets.append(bbox_targets.reshape(-1, 4))
+            all_bbox_preds.append(bbox_pred.permute(0, 2, 3, 1).reshape(-1, 4))
+        cls_labels = torch.cat(all_labels)
+        all_cls_scores = torch.cat(all_cls_scores)
+
+        bg_class_ind = self.num_classes
+        pos_inds = ((cls_labels >= 0)
+                    & (cls_labels < bg_class_ind)).nonzero().squeeze(1)
+        pos_bbox_targets = torch.cat(all_bbox_targets)[pos_inds]
+        pos_bbox_pred = torch.cat(all_bbox_preds)[pos_inds]
+        pos_anchors = torch.cat(all_anchors)[pos_inds]
+        bbox_weights = (all_cls_scores.detach().sigmoid().max(dim=1)[0][pos_inds])
+        pos_decode_bbox_pred = self.bbox_coder.decode(
+                pos_anchors, pos_bbox_pred)
+        pos_decode_bbox_targets = self.bbox_coder.decode(
+                pos_anchors, pos_bbox_targets)
+        flat_labels = vectorize_labels(cls_labels, self.num_classes, torch.cat(all_label_weights))
+        flat_preds = all_cls_scores.reshape(-1)
+        IoU_targets = bbox_overlaps(pos_decode_bbox_pred.detach(), pos_decode_bbox_targets, is_aligned=True)
+        flat_labels[flat_labels==1]=IoU_targets
+        print("IoU targets:", IoU_targets)
+
+
+        if self.rank_loss_type['type'] == 'RankSort' or self.rank_loss_type['type'] == 'BucketedRankSort':
+            loss_rank,loss_sort, losses_bbox, loss_centerness,\
+                bbox_avg_factor = multi_apply(
+                    self.loss_single,
+                    anchor_list,
+                    cls_scores,
+                    bbox_preds,
+                    centernesses,
+                    labels_list,
+                    label_weights_list,
+                    bbox_targets_list,
+                    new_img_metas,
+                    num_total_samples=num_total_samples, flat_labels=flat_labels, flat_preds=flat_preds)
+
+            bbox_avg_factor = sum(bbox_avg_factor)
+            bbox_avg_factor = reduce_mean(bbox_avg_factor).clamp_(min=1).item()
+            losses_bbox = list(map(lambda x: x / bbox_avg_factor, losses_bbox))
+
+            pos_coords = (ori_anchors, ori_labels, ori_bbox_targets, 'atss')
+            return dict(
+                loss_rank=loss_rank,
+                loss_sort=loss_sort,
+                loss_bbox=losses_bbox,
+                loss_centerness=loss_centerness,
+                pos_coords=pos_coords)
+        else:
+            losses_cls, losses_bbox, loss_centerness,\
             bbox_avg_factor = multi_apply(
                 self.loss_single,
                 anchor_list,
@@ -283,7 +409,7 @@ class CoATSSHead(AnchorHead):
                 label_weights_list,
                 bbox_targets_list,
                 new_img_metas,
-                num_total_samples=num_total_samples)
+                num_total_samples=num_total_samples, flat_labels=flat_labels, flat_preds=flat_preds)
 
         bbox_avg_factor = sum(bbox_avg_factor)
         bbox_avg_factor = reduce_mean(bbox_avg_factor).clamp_(min=1).item()
@@ -530,6 +656,7 @@ class CoATSSHead(AnchorHead):
         else:
             loss_inputs = outs + (gt_bboxes, gt_labels, img_metas)
         losses = self.loss(*loss_inputs, gt_bboxes_ignore=gt_bboxes_ignore)
+
         if proposal_cfg is None:
             return losses
         else:

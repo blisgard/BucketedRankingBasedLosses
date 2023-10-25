@@ -250,6 +250,7 @@ def analyze_results(res_file,
         os.makedirs(directory)
 
     cocoGt = COCO(ann_file)
+    print(res_file)
     cocoDt = cocoGt.loadRes(res_file)
     imgIds = cocoGt.getImgIds()
     for res_type in res_types:

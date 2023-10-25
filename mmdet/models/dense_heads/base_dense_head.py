@@ -5,7 +5,7 @@ import torch
 from mmcv.cnn.utils.weight_init import constant_init
 from mmcv.ops import batched_nms
 from mmcv.runner import BaseModule, force_fp32
-
+import inspect
 from mmdet.core.utils import filter_scores_and_topk, select_single_mlvl
 
 
@@ -98,7 +98,7 @@ class BaseDenseHead(BaseModule, metaclass=ABCMeta):
                 score_factor_list = select_single_mlvl(score_factors, img_id)
             else:
                 score_factor_list = [None for _ in range(num_levels)]
-
+            print(self._get_bboxes_single)
             results = self._get_bboxes_single(cls_score_list, bbox_pred_list,
                                               score_factor_list, mlvl_priors,
                                               img_meta, cfg, rescale, with_nms,

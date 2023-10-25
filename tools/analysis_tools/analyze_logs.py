@@ -194,7 +194,7 @@ def main():
     json_logs = args.json_logs
     for json_log in json_logs:
         assert json_log.endswith('.json')
-
+    args.out = './atss_bbox_map_l.png'
     log_dicts = load_json_logs(json_logs)
 
     eval(args.task)(log_dicts, args)

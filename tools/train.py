@@ -5,7 +5,7 @@ import os
 import os.path as osp
 import time
 import warnings
-
+import sys
 import mmcv
 import torch
 import torch.distributed as dist
@@ -20,6 +20,7 @@ from mmdet.models import build_detector
 from mmdet.utils import (collect_env, get_device, get_root_logger,
                          replace_cfg_vals, setup_multi_processes,
                          update_data_root)
+
 from projects import *
 
 

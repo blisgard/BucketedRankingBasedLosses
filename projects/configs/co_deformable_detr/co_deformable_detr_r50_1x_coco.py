@@ -27,7 +27,7 @@ model = dict(
         norm_cfg=dict(type='GN', num_groups=32),
         num_outs=4),
     rpn_head=dict(
-        type='RPNHead',
+        type='RankBasedRPNHead',
         in_channels=256,
         feat_channels=256,
         anchor_generator=dict(
@@ -139,15 +139,14 @@ model = dict(
             type='DeltaXYWHBBoxCoder',
             target_means=[.0, .0, .0, .0],
             target_stds=[0.1, 0.1, 0.2, 0.2]),
-        loss_cls=dict(
-            type='FocalLoss',
-            use_sigmoid=True,
-            gamma=2.0,
-            alpha=0.25,
+        rank_loss_type=dict(
+            type='RankSort',
             loss_weight=1.0*num_dec_layer*lambda_2),
         loss_bbox=dict(type='GIoULoss', loss_weight=2.0*num_dec_layer*lambda_2),
         loss_centerness=dict(
-            type='CrossEntropyLoss', use_sigmoid=True, loss_weight=1.0*num_dec_layer*lambda_2)),],
+            type='CrossEntropyLoss', use_sigmoid=True, loss_weight=1.0*num_dec_layer*lambda_2), 
+        ),
+            ],
     # model training and testing settings
     train_cfg=[
         dict(
@@ -176,6 +175,8 @@ model = dict(
                 debug=False),
             rpn_proposal=dict(
                 nms_pre=4000,
+                nms_post=4000,
+                nms_thr=0.7,
                 max_per_img=1000,
                 nms=dict(type='nms', iou_threshold=0.7),
                 min_bbox_size=0),
@@ -292,8 +293,8 @@ test_pipeline = [
 ]
 
 data = dict(
-    samples_per_gpu=2,
-    workers_per_gpu=2,
+    samples_per_gpu=4,
+    workers_per_gpu=4,
     train=dict(filter_empty_gt=False, pipeline=train_pipeline),
     val=dict(pipeline=test_pipeline),
     test=dict(pipeline=test_pipeline))

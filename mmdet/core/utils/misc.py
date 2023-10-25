@@ -206,3 +206,14 @@ def generate_coordinate(featmap_sizes, device='cuda'):
     coord_feat = torch.cat([x, y], 1)
 
     return coord_feat
+
+def vectorize_labels(flat_labels, num_classes, label_weights = None):
+    prediction_number = flat_labels.shape[0]
+    labels = torch.zeros( [prediction_number, num_classes], device=flat_labels.device)
+    pos_labels = flat_labels < num_classes
+    labels[pos_labels, flat_labels[pos_labels]] = 1
+    if label_weights is not None:
+        ignore_labels = (label_weights == 0)
+        labels[ignore_labels, :] = -1
+
+    return labels.reshape(-1)
