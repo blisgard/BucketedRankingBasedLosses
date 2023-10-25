@@ -254,7 +254,6 @@ def delta2bbox(rois,
     x2y2 = gxy + (gwh * 0.5)
     bboxes = torch.cat([x1y1, x2y2], dim=-1)
     if clip_border and max_shape is not None:
-        print("max_shpae:",max_shape)
         bboxes[..., 0::2].clamp_(min=0, max=max_shape[1])
         bboxes[..., 1::2].clamp_(min=0, max=max_shape[0])
     bboxes = bboxes.reshape(num_bboxes, -1)

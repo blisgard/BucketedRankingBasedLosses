@@ -367,9 +367,9 @@ class CoATSSHead(AnchorHead):
                 pos_anchors, pos_bbox_targets)
         flat_labels = vectorize_labels(cls_labels, self.num_classes, torch.cat(all_label_weights))
         flat_preds = all_cls_scores.reshape(-1)
-        IoU_targets = bbox_overlaps(pos_decode_bbox_pred.detach(), pos_decode_bbox_targets, is_aligned=True)
+        IoU_targets = bbox_overlaps(pos_decode_bbox_pred.detach(), pos_bbox_targets, is_aligned=True)
         flat_labels[flat_labels==1]=IoU_targets
-        print("IoU targets:", IoU_targets)
+        print("IoU targets co atss:", IoU_targets[0])
 
 
         if self.rank_loss_type['type'] == 'RankSort' or self.rank_loss_type['type'] == 'BucketedRankSort':

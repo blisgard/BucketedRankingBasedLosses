@@ -153,8 +153,10 @@ class RankBasedRPNHead(RPNTestMixin, AnchorHead):
                     bbox_avg_factor = 1
 
                 loss_bbox = torch.sum(pos_weights*loss_bbox)/bbox_avg_factor
-
+                print("pos_pred:", pos_pred[0].detach())
+                print("pos_target:", pos_target[0])
                 IoU_targets = bbox_overlaps(pos_pred.detach(), pos_target, is_aligned=True)
+                print("IoU targets:", IoU_targets[0])
                 flat_labels[flat_labels==1]=IoU_targets
                 
                 ranking_loss, sorting_loss = self.loss_rank.apply(flat_preds, flat_labels)
@@ -261,11 +263,6 @@ class RankBasedRPNHead(RPNTestMixin, AnchorHead):
         mlvl_scores = []
         mlvl_bbox_preds = []
         mlvl_valid_anchors = []
-        print("cls_scores shape:", len(cls_scores), cls_scores[0].shape)
-        print("bbox_preds shape:", len(bbox_preds), bbox_preds[0].shape)
-        print("scale factor shape:" ,scale_factor)
-        print("mlvl_anchors shape:" ,len(mlvl_anchors), mlvl_anchors[0].shape)
-        print("imag_shape:" ,img_shape)
         for idx in range(len(cls_scores)):
             rpn_cls_score = cls_scores[idx]
             rpn_bbox_pred = bbox_preds[idx]
@@ -317,7 +314,6 @@ class RankBasedRPNHead(RPNTestMixin, AnchorHead):
                 ids = ids[valid_inds]
 
         # TODO: remove the hard coded nms type
-        print("cfg:", cfg)
         nms_cfg = dict(type='nms', iou_threshold=cfg.nms_thr)
         dets, keep = batched_nms(proposals, scores, ids, nms_cfg)
         return dets[:cfg.nms_post]
