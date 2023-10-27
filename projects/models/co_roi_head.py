@@ -132,6 +132,7 @@ class CoStandardRoIHead(BaseRoIHead, BBoxTestMixin, MaskTestMixin):
 
         # mask head forward and loss
         if self.with_mask:
+
             mask_results = self._mask_forward_train(x, sampling_results,
                                                     bbox_results['bbox_feats'],
                                                     gt_masks, img_metas)

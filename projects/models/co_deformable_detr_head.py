@@ -326,6 +326,10 @@ class CoDeformDETRHead(DETRHead):
         num_total_pos = len(((labels >= 0) & (labels < bg_class_ind)).nonzero().squeeze(1))
         num_total_neg = num_imgs*num_q - num_total_pos
 
+        print("total:", num_total_pos + num_total_neg)
+        print("total_pos:", num_total_pos)
+        print("num_total_neg:", num_total_neg)
+        print("labels:", labels)
         # classification loss
         cls_scores = cls_scores.reshape(-1, self.cls_out_channels)
         # construct weighted avg_factor to match with the official DETR repo
@@ -507,6 +511,7 @@ class CoDeformDETRHead(DETRHead):
             loss_inputs = outs + (gt_bboxes, img_metas)
         else:
             loss_inputs = outs + (gt_bboxes, gt_labels, img_metas)
+        
         losses = self.loss_aux(*loss_inputs, gt_bboxes_ignore=gt_bboxes_ignore)
         return losses
 

@@ -10,7 +10,7 @@ from mmdet.models.dense_heads.anchor_head import AnchorHead
 from mmdet.models.losses import ranking_losses
 
 @HEADS.register_module()
-class CoATSSHead(AnchorHead):
+class RankBasedCoATSSHead(AnchorHead):
     """Bridging the Gap Between Anchor-based and Anchor-free Detection via
     Adaptive Training Sample Selection.
 
@@ -27,10 +27,6 @@ class CoATSSHead(AnchorHead):
                  conv_cfg=None,
                  norm_cfg=dict(type='GN', num_groups=32, requires_grad=True),
                  reg_decoded_bbox=True,
-                 loss_centerness=dict(
-                     type='CrossEntropyLoss',
-                     use_sigmoid=True,
-                     loss_weight=1.0),
                 rank_loss_type = dict(
                      type='',
                      use_sigmoid=True,
@@ -48,7 +44,7 @@ class CoATSSHead(AnchorHead):
         self.stacked_convs = stacked_convs
         self.conv_cfg = conv_cfg
         self.norm_cfg = norm_cfg
-        super(CoATSSHead, self).__init__(
+        super(RankBasedCoATSSHead, self).__init__(
             num_classes,
             in_channels,
             reg_decoded_bbox=reg_decoded_bbox,
@@ -60,7 +56,6 @@ class CoATSSHead(AnchorHead):
             # SSD sampling=False so use PseudoSampler
             sampler_cfg = dict(type='PseudoSampler')
             self.sampler = build_sampler(sampler_cfg, context=self)
-        self.loss_centerness = build_loss(loss_centerness)
         if rank_loss_type['type'] != '':
             self.loss_rank = build_loss(rank_loss_type)
         self.rank_loss_type = rank_loss_type
@@ -99,8 +94,6 @@ class CoATSSHead(AnchorHead):
             padding=1)
         self.atss_reg = nn.Conv2d(
             self.feat_channels, self.num_base_priors * 4, 3, padding=1)
-        self.atss_centerness = nn.Conv2d(
-            self.feat_channels, self.num_base_priors * 1, 3, padding=1)
         self.scales = nn.ModuleList(
             [Scale(1.0) for _ in self.prior_generator.strides])
 
@@ -136,8 +129,6 @@ class CoATSSHead(AnchorHead):
                     the channels number is num_anchors * num_classes.
                 bbox_pred (Tensor): Box energies / deltas for a single scale
                     level, the channels number is num_anchors * 4.
-                centerness (Tensor): Centerness for a single scale level, the
-                    channel number is (N, num_anchors * 1, H, W).
         """
         cls_feat = x
         reg_feat = x
@@ -148,10 +139,9 @@ class CoATSSHead(AnchorHead):
         cls_score = self.atss_cls(cls_feat)
         # we just follow atss, not apply exp in bbox_pred
         bbox_pred = scale(self.atss_reg(reg_feat)).float()
-        centerness = self.atss_centerness(reg_feat)
-        return cls_score, bbox_pred, centerness
+        return cls_score, bbox_pred
 
-    def loss_single(self, anchors, cls_score, bbox_pred, centerness, labels,
+    def loss_single(self, anchors, cls_score, bbox_pred, labels,
                     label_weights, bbox_targets, img_metas, num_total_samples, flat_labels, flat_preds):
         """Compute loss of a single scale level.
 
@@ -181,7 +171,6 @@ class CoATSSHead(AnchorHead):
         cls_score = cls_score.permute(0, 2, 3, 1).reshape(
             -1, self.cls_out_channels).contiguous()
         bbox_pred = bbox_pred.permute(0, 2, 3, 1).reshape(-1, 4)
-        centerness = centerness.permute(0, 2, 3, 1).reshape(-1)
         bbox_targets = bbox_targets.reshape(-1, 4)
         labels = labels.reshape(-1)
         label_weights = label_weights.reshape(-1)
@@ -198,7 +187,6 @@ class CoATSSHead(AnchorHead):
 
             ranking_loss, sorting_loss = self.loss_rank.apply(flat_preds, flat_labels, 0.5)
 
-
             # FG cat_id: [0, num_classes -1], BG cat_id: num_classes
             bg_class_ind = self.num_classes
             pos_inds = ((labels >= 0)
@@ -208,10 +196,7 @@ class CoATSSHead(AnchorHead):
                 pos_bbox_targets = bbox_targets[pos_inds]
                 pos_bbox_pred = bbox_pred[pos_inds]
                 pos_anchors = anchors[pos_inds]
-                pos_centerness = centerness[pos_inds]
 
-                centerness_targets = self.centerness_target(
-                    pos_anchors, pos_bbox_targets)
                 pos_decode_bbox_pred = self.bbox_coder.decode(
                     pos_anchors, pos_bbox_pred)
 
@@ -220,24 +205,14 @@ class CoATSSHead(AnchorHead):
                 # regression loss
                 loss_bbox = self.loss_bbox(
                     pos_decode_bbox_pred,
-                    pos_bbox_targets,
-                    weight=centerness_targets,
-                    avg_factor=1.0)
-
-                # centerness loss
-                loss_centerness = self.loss_centerness(
-                    pos_centerness,
-                    centerness_targets,
-                    avg_factor=num_total_samples)
+                    pos_bbox_targets)
                 
 
             else:
                 loss_bbox = bbox_pred.sum() * 0
-                loss_centerness = centerness.sum() * 0
-                centerness_targets = bbox_targets.new_tensor(0.)
                 
 
-            return ranking_loss, sorting_loss, loss_bbox, loss_centerness, centerness_targets.sum()
+            return ranking_loss, sorting_loss, loss_bbox
         else:
             loss_cls = self.loss_cls(cls_score, labels, label_weights, avg_factor=num_total_samples)
             bg_class_ind = self.num_classes
@@ -248,40 +223,27 @@ class CoATSSHead(AnchorHead):
                 pos_bbox_targets = bbox_targets[pos_inds]
                 pos_bbox_pred = bbox_pred[pos_inds]
                 pos_anchors = anchors[pos_inds]
-                pos_centerness = centerness[pos_inds]
 
-                centerness_targets = self.centerness_target(
-                    pos_anchors, pos_bbox_targets)
                 pos_decode_bbox_pred = self.bbox_coder.decode(
                     pos_anchors, pos_bbox_pred)
 
                 # regression loss
                 loss_bbox = self.loss_bbox(
                     pos_decode_bbox_pred,
-                    pos_bbox_targets,
-                    weight=centerness_targets,
-                    avg_factor=1.0)
+                    pos_bbox_targets)
 
-                # centerness loss
-                loss_centerness = self.loss_centerness(
-                    pos_centerness,
-                    centerness_targets,
-                    avg_factor=num_total_samples)
                 
 
             else:
                 loss_bbox = bbox_pred.sum() * 0
-                loss_centerness = centerness.sum() * 0
-                centerness_targets = bbox_targets.new_tensor(0.)
                 
 
-            return loss_cls, loss_bbox, loss_centerness, centerness_targets.sum()
+            return loss_cls, loss_bbox
 
-    @force_fp32(apply_to=('cls_scores', 'bbox_preds', 'centernesses'))
+    @force_fp32(apply_to=('cls_scores', 'bbox_preds'))
     def loss(self,
              cls_scores,
              bbox_preds,
-             centernesses,
              gt_bboxes,
              gt_labels,
              img_metas,
@@ -293,8 +255,6 @@ class CoATSSHead(AnchorHead):
                 Has shape (N, num_anchors * num_classes, H, W)
             bbox_preds (list[Tensor]): Box energies / deltas for each scale
                 level with shape (N, num_anchors * 4, H, W)
-            centernesses (list[Tensor]): Centerness for each scale
-                level with shape (N, num_anchors * 1, H, W)
             gt_bboxes (list[Tensor]): Ground truth bboxes for each image with
                 shape (num_gts, 4) in [tl_x, tl_y, br_x, br_y] format.
             gt_labels (list[Tensor]): class indices corresponding to each box
@@ -363,12 +323,8 @@ class CoATSSHead(AnchorHead):
         bbox_weights = (all_cls_scores.detach().sigmoid().max(dim=1)[0][pos_inds])
         pos_decode_bbox_pred = self.bbox_coder.decode(
                 pos_anchors, pos_bbox_pred)
-        print("pos_bbox_pred:", pos_bbox_pred[0])
-        print("pos_bbox_targets:", pos_bbox_targets[0])
         pos_decode_bbox_targets = self.bbox_coder.decode(
                 pos_anchors, pos_bbox_targets)
-        print("pos_decode_bbox_pred:", pos_decode_bbox_pred[0])
-        print("pos_decode_bbox_target:", pos_decode_bbox_targets[0])
         flat_labels = vectorize_labels(cls_labels, self.num_classes, torch.cat(all_label_weights))
         flat_preds = all_cls_scores.reshape(-1)
         IoU_targets = bbox_overlaps(pos_decode_bbox_pred.detach(), pos_bbox_targets, is_aligned=True)
@@ -376,20 +332,18 @@ class CoATSSHead(AnchorHead):
 
 
         if self.rank_loss_type['type'] == 'RankSort' or self.rank_loss_type['type'] == 'BucketedRankSort':
-            loss_rank,loss_sort, losses_bbox, loss_centerness,\
-                bbox_avg_factor = multi_apply(
+            print("ATSS")
+            loss_rank,loss_sort, losses_bbox = multi_apply(
                     self.loss_single,
                     anchor_list,
                     cls_scores,
                     bbox_preds,
-                    centernesses,
                     labels_list,
                     label_weights_list,
                     bbox_targets_list,
                     new_img_metas,
                     num_total_samples=num_total_samples, flat_labels=flat_labels, flat_preds=flat_preds)
-
-            bbox_avg_factor = sum(bbox_avg_factor)
+            bbox_avg_factor = torch.sum(bbox_weights)
             bbox_avg_factor = reduce_mean(bbox_avg_factor).clamp_(min=1).item()
             losses_bbox = list(map(lambda x: x / bbox_avg_factor, losses_bbox))
 
@@ -398,23 +352,20 @@ class CoATSSHead(AnchorHead):
                 loss_rank=loss_rank,
                 loss_sort=loss_sort,
                 loss_bbox=losses_bbox,
-                loss_centerness=loss_centerness,
                 pos_coords=pos_coords)
         else:
-            losses_cls, losses_bbox, loss_centerness,\
-            bbox_avg_factor = multi_apply(
+            losses_cls, losses_bbox = multi_apply(
                 self.loss_single,
                 anchor_list,
                 cls_scores,
                 bbox_preds,
-                centernesses,
                 labels_list,
                 label_weights_list,
                 bbox_targets_list,
                 new_img_metas,
                 num_total_samples=num_total_samples, flat_labels=flat_labels, flat_preds=flat_preds)
 
-        bbox_avg_factor = sum(bbox_avg_factor)
+        bbox_avg_factor = torch.sum(bbox_weights)
         bbox_avg_factor = reduce_mean(bbox_avg_factor).clamp_(min=1).item()
         losses_bbox = list(map(lambda x: x / bbox_avg_factor, losses_bbox))
 
@@ -422,7 +373,6 @@ class CoATSSHead(AnchorHead):
         return dict(
             loss_cls=losses_cls,
             loss_bbox=losses_bbox,
-            loss_centerness=loss_centerness,
             pos_coords=pos_coords)
 
     def centerness_target(self, anchors, gts):

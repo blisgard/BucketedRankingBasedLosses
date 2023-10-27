@@ -185,6 +185,7 @@ class CoDETR(BaseDetector):
         def upd_loss(losses, idx, weight=1):
             new_losses = dict()
             for k,v in losses.items():
+                print("k", k,"v",v)
                 new_k = '{}{}'.format(k,idx)
                 if isinstance(v,list) or isinstance(v,tuple):
                     new_losses[new_k] = [i*weight for i in v]
@@ -227,7 +228,6 @@ class CoDETR(BaseDetector):
                     tmp = roi_losses.pop('pos_coords')     
             roi_losses = upd_loss(roi_losses, idx=i)
             losses.update(roi_losses)
-            
         for i in range(len(self.bbox_head)):
             bbox_losses = self.bbox_head[i].forward_train(x, img_metas, gt_bboxes,
                                                         gt_labels, gt_bboxes_ignore)
@@ -239,7 +239,6 @@ class CoDETR(BaseDetector):
                     tmp = bbox_losses.pop('pos_coords')          
             bbox_losses = upd_loss(bbox_losses, idx=i+len(self.roi_head))
             losses.update(bbox_losses)
-
         if self.with_pos_coord and len(positive_coords)>0:
             for i in range(len(positive_coords)):
                 bbox_losses = self.query_head.forward_train_aux(x, img_metas, gt_bboxes,
