@@ -249,7 +249,6 @@ class AnchorHead(BaseDenseHead, BBoxTestMixin):
             None if self.sampling else gt_labels)
         sampling_result = self.sampler.sample(assign_result, anchors,
                                               gt_bboxes)
-
         num_valid_anchors = anchors.shape[0]
         bbox_targets = torch.zeros_like(anchors)
         bbox_weights = torch.zeros_like(anchors)
@@ -260,6 +259,7 @@ class AnchorHead(BaseDenseHead, BBoxTestMixin):
 
         pos_inds = sampling_result.pos_inds
         neg_inds = sampling_result.neg_inds
+
         if len(pos_inds) > 0:
             if not self.reg_decoded_bbox:
                 pos_bbox_targets = self.bbox_coder.encode(
@@ -281,6 +281,8 @@ class AnchorHead(BaseDenseHead, BBoxTestMixin):
                 label_weights[pos_inds] = self.train_cfg.pos_weight
         if len(neg_inds) > 0:
             label_weights[neg_inds] = 1.0
+
+
 
         # map up to original set of anchors
         if unmap_outputs:

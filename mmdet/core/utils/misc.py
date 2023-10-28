@@ -214,6 +214,7 @@ def vectorize_labels(flat_labels, num_classes, label_weights = None):
     labels[pos_labels, flat_labels[pos_labels]] = 1
     if label_weights is not None:
         ignore_labels = (label_weights == 0)
+        print("len ignore labels:", len(labels[ignore_labels, :]))
         labels[ignore_labels, :] = -1
 
     return labels.reshape(-1)

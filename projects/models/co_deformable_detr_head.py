@@ -574,7 +574,6 @@ class CoDeformDETRHead(DETRHead):
         all_gt_bboxes_ignore_list = [
             gt_bboxes_ignore for _ in range(num_dec_layers)
         ]
-
         losses_cls, losses_bbox, losses_iou = multi_apply(
             self.loss_single_aux, all_cls_scores, all_bbox_preds,
             all_labels, all_label_weights, all_bbox_targets, 

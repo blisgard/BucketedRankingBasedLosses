@@ -296,7 +296,6 @@ class RankBasedShared2FCBBoxHead(ConvFCBBoxHead):
                 loss_bbox = self.loss_bbox(pos_bbox_pred, pos_target)
 
                 if self.rank_loss_type == 'RankSort' or self.rank_loss_type == 'BucketedRankSort':
-
                     bbox_weights = cls_score.detach().sigmoid().max(dim=1)[0][pos_inds]
 
                     IoU_targets = bbox_overlaps(pos_bbox_pred.detach(), pos_target, is_aligned=True)

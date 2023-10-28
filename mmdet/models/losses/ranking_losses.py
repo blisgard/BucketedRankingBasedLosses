@@ -171,13 +171,11 @@ class RankSort(torch.autograd.Function):
     def forward(ctx, logits, targets, delta_RS=0.50, eps=1e-10): 
 
         classification_grads=torch.zeros(logits.shape).cuda()
-        print("logits shape: ", logits.shape)
         #Filter fg logits
         fg_labels = (targets > 0.)
         fg_logits = logits[fg_labels]
         fg_targets = targets[fg_labels]
         fg_num = len(fg_logits)
-        print("num of positive labels:", fg_num)
         if len(logits) == 0:
             print("logit sayisi sifir")
             ctx.save_for_backward(classification_grads)

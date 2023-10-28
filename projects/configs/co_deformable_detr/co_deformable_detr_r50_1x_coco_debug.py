@@ -40,6 +40,8 @@ model = dict(
             type='DeltaXYWHBBoxCoder',
             target_means=[.0, .0, .0, .0],
             target_stds=[1.0, 1.0, 1.0, 1.0]),
+            rank_loss_type = dict(
+                type='RankSort', loss_weight=1.0*num_dec_layer*lambda_2),
         loss_cls=dict(
             type='CrossEntropyLoss', use_sigmoid=True, loss_weight=1.0*num_dec_layer*lambda_2),
         loss_bbox=dict(type='GIoULoss', loss_weight=1.0*num_dec_layer*lambda_2)),
@@ -101,7 +103,7 @@ model = dict(
         loss_bbox=dict(type='L1Loss', loss_weight=5.0),
         loss_iou=dict(type='GIoULoss', loss_weight=2.0)),
     roi_head=[dict(
-        type='CoStandardRoIHead',
+        type='RankBasedStandardRoIHead',
         bbox_roi_extractor=dict(
             type='SingleRoIExtractor',
             roi_layer=dict(type='RoIAlign', output_size=7, sampling_ratio=0),
@@ -109,11 +111,13 @@ model = dict(
             featmap_strides=[8, 16, 32, 64],
             finest_scale=112),
         bbox_head=dict(
-            type='Shared2FCBBoxHead',
+            type='RankBasedShared2FCBBoxHead',
             in_channels=256,
             fc_out_channels=1024,
             roi_feat_size=7,
             num_classes=80,
+            rank_loss_type = dict(
+                type='RankSort', loss_weight=1.0*num_dec_layer*lambda_2),
             bbox_coder=dict(
                 type='DeltaXYWHBBoxCoder',
                 target_means=[0., 0., 0., 0.],

@@ -139,9 +139,6 @@ class NumClassCheckHook(Hook):
                  f'Add comma if number of classes is 1 as '
                  f'CLASSES = ({dataset.CLASSES},)')
             for name, module in model.named_modules():
-                print(module)
-                print( hasattr(module, 'num_classes'))
-                print("----------------------------")
                 if hasattr(module, 'num_classes') and not isinstance(
                         module, (RankBasedRPNHead,RPNHead, VGG, FusedSemanticHead, GARPNHead)):
                     assert module.num_classes == len(dataset.CLASSES), \

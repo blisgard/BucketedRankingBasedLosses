@@ -185,7 +185,6 @@ class CoDETR(BaseDetector):
         def upd_loss(losses, idx, weight=1):
             new_losses = dict()
             for k,v in losses.items():
-                print("k", k,"v",v)
                 new_k = '{}{}'.format(k,idx)
                 if isinstance(v,list) or isinstance(v,tuple):
                     new_losses[new_k] = [i*weight for i in v]

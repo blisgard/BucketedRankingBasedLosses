@@ -101,7 +101,7 @@ model = dict(
         loss_bbox=dict(type='L1Loss', loss_weight=5.0),
         loss_iou=dict(type='GIoULoss', loss_weight=2.0)),
     roi_head=[dict(
-        type='CoStandardRoIHead',
+        type='RankBasedStandardRoIHead',
         bbox_roi_extractor=dict(
             type='SingleRoIExtractor',
             roi_layer=dict(type='RoIAlign', output_size=7, sampling_ratio=0),
@@ -109,11 +109,12 @@ model = dict(
             featmap_strides=[8, 16, 32, 64],
             finest_scale=112),
         bbox_head=dict(
-            type='Shared2FCBBoxHead',
+            type='RankBasedShared2FCBBoxHead',
             in_channels=256,
             fc_out_channels=1024,
             roi_feat_size=7,
             num_classes=80,
+            rank_loss_type = 'RankSort',
             bbox_coder=dict(
                 type='DeltaXYWHBBoxCoder',
                 target_means=[0., 0., 0., 0.],
@@ -292,8 +293,8 @@ data = dict(
 # optimizer
 optimizer = dict(
     type='AdamW',
-    lr=2e-4,
-    weight_decay=1e-4,
+    lr=1e-4,
+    weight_decay=0.5e-4,
     paramwise_cfg=dict(
         custom_keys={
             'backbone': dict(lr_mult=0.1),

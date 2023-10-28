@@ -127,7 +127,6 @@ class RankBasedRPNHead(RPNTestMixin, AnchorHead):
             all_labels.append(labels.reshape(-1))
             all_label_weights.append(label_weights.reshape(-1))
             all_cls_scores.append(cls_score.permute(0, 2, 3, 1).reshape(-1, self.cls_out_channels))
-            
             all_bbox_targets.append(bbox_targets.reshape(-1, 4))
             all_bbox_weights.append(bbox_weights.reshape(-1, 4))
             all_bbox_preds.append(bbox_pred.permute(0, 2, 3, 1).reshape(-1, 4))
@@ -146,6 +145,7 @@ class RankBasedRPNHead(RPNTestMixin, AnchorHead):
             flat_labels = vectorize_labels(cls_labels, self.num_classes, torch.cat(all_label_weights))
             flat_preds = all_scores.reshape(-1)
             if self.rank_loss_type == 'RankSort' or self.rank_loss_type == 'BucketedRankSort':
+                print("RPN")
                 pos_weights = all_scores.detach().sigmoid().max(dim=1)[0][pos_idx]
 
                 bbox_avg_factor = torch.sum(pos_weights)
@@ -153,16 +153,11 @@ class RankBasedRPNHead(RPNTestMixin, AnchorHead):
                     bbox_avg_factor = 1
 
                 loss_bbox = torch.sum(pos_weights*loss_bbox)/bbox_avg_factor
-                print("pos_pred:", pos_pred[0].detach())
-                print("pos_target:", pos_target[0])
                 IoU_targets = bbox_overlaps(pos_pred.detach(), pos_target, is_aligned=True)
-                print("IoU targets:", IoU_targets[0])
                 flat_labels[flat_labels==1]=IoU_targets
-                
                 ranking_loss, sorting_loss = self.loss_rank.apply(flat_preds, flat_labels)
                 self.SB_weight = (ranking_loss+sorting_loss).detach()/float(loss_bbox.item())
                 loss_bbox *= self.SB_weight
-
                 return dict(loss_rpn_rank=self.head_weight*ranking_loss, loss_rpn_sort=self.head_weight*sorting_loss, loss_rpn_bbox=self.head_weight*loss_bbox)
 
             elif self.rank_loss_type == 'aLRP':
