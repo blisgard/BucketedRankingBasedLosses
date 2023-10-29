@@ -190,7 +190,6 @@ class RankSort(torch.autograd.Function):
         relevant_bg_labels=((targets==0) & (logits>=threshold_logit))
         
         relevant_bg_logits = logits[relevant_bg_labels] 
-        print("len of relevant bg logits:", len(relevant_bg_logits))
         relevant_bg_grad=torch.zeros(len(relevant_bg_logits)).cuda()
         sorting_error=torch.zeros(fg_num).cuda()
         ranking_error=torch.zeros(fg_num).cuda()
@@ -260,8 +259,6 @@ class RankSort(torch.autograd.Function):
                 #For positives, distribute error via sorting pmf (i.e. missorted_examples/sorting_pmf_denom)
                 fg_grad += (missorted_examples*(sorting_error[ii]/sorting_pmf_denom))
 
-        print("sorting error:", sorting_error.mean())
-        print("ranking error:", ranking_error.mean())
         #Normalize gradients by number of positives 
         classification_grads[fg_labels]= (fg_grad/fg_num)
         classification_grads[relevant_bg_labels]= (relevant_bg_grad/fg_num)

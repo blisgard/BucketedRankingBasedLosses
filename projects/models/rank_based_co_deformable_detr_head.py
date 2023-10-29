@@ -408,7 +408,7 @@ class RankBasedCoDeformDETRHead(DETRHead):
             self.SB_weight = (ranking_loss+sorting_loss).detach()/float(losses_bbox.item())
             losses_bbox *= self.SB_weight
 
-            return ranking_loss*self.lambda_1, sorting_loss*self.lambda_1, loss_bbox*self.lambda_1, loss_iou*self.lambda_1
+            return ranking_loss*self.lambda_1, sorting_loss*self.lambda_1, losses_bbox*self.lambda_1, losses_iou*self.lambda_1
 
     def get_aux_targets(self, pos_coords, img_metas, mlvl_feats, head_idx):
         coords, labels, targets = pos_coords[:3]
@@ -744,6 +744,9 @@ class RankBasedCoDeformDETRHead(DETRHead):
                 self.loss_single(enc_cls_scores, enc_bbox_preds,
                                  gt_bboxes_list, binary_labels_list,
                                  img_metas, gt_bboxes_ignore)
+
+
+
             loss_dict['enc_loss_rank'] = enc_loss_rank
             loss_dict['enc_loss_sort'] = enc_loss_sort
             loss_dict['enc_loss_bbox'] = enc_losses_bbox
@@ -760,6 +763,7 @@ class RankBasedCoDeformDETRHead(DETRHead):
                                                                      losses_sort[:-1],
                                                        losses_bbox[:-1],
                                                        losses_iou[:-1]):
+
             loss_dict[f'd{num_dec_layer}.loss_rank_i'] = loss_rank_i
             loss_dict[f'd{num_dec_layer}.loss_sort_i'] = loss_sort_i
             loss_dict[f'd{num_dec_layer}.loss_bbox'] = loss_bbox_i
@@ -918,21 +922,26 @@ class RankBasedCoDeformDETRHead(DETRHead):
                 bbox_avg_factor = 1
                 
             losses_bbox = torch.sum(bbox_weights*loss_bbox)/bbox_avg_factor
-
+            print("losses_bbox:", losses_bbox)                
             self.SB_weight = (ranking_loss+sorting_loss).detach()/float(losses_bbox.item())
+            print("self.SB_weight:", self.SB_weight)
             losses_bbox *= self.SB_weight
-
+            print("losses_bbox:", losses_bbox)
+            print("rank+sort loss:", ranking_loss+sorting_loss)
             # regression IoU loss, defaultly GIoU loss
             loss_iou = self.loss_iou(
                 bboxes, bboxes_gt, bbox_weights, avg_factor=num_total_pos)
-                
             losses_iou = torch.sum(bbox_weights*loss_iou)/bbox_avg_factor
+            print("losses_iou:", losses_iou)                
 
             self.SB_weight = (ranking_loss+sorting_loss).detach()/float(losses_iou.item())
+            print("self.SB_weight:", self.SB_weight)
             losses_iou *= self.SB_weight
+            print("losses_iou:", losses_iou)
+            print("rank+sort loss:", ranking_loss+sorting_loss)
 
 
-            return ranking_loss, sorting_loss, loss_bbox, loss_iou
+            return ranking_loss, sorting_loss, losses_bbox, losses_iou
 
     def get_targets(self,
                     cls_scores_list,
