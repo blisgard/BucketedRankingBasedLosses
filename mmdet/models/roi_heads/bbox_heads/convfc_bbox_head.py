@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 from mmcv.cnn import ConvModule
 
-from mmdet.models.builder import HEADS
+from mmdet.models.builder import HEADS, build_loss
 from mmdet.models.utils import build_linear_layer
 from .bbox_head import BBoxHead
 from mmdet.core import vectorize_labels, bbox_overlaps, multiclass_nms
@@ -239,7 +239,8 @@ class Shared4Conv1FCBBoxHead(ConvFCBBoxHead):
 @HEADS.register_module()
 class RankBasedShared2FCBBoxHead(ConvFCBBoxHead):
 
-    def __init__(self, fc_out_channels=1024, rank_loss_type = 'RankSort', *args, **kwargs):
+    def __init__(self, fc_out_channels=1024, rank_loss_type = dict(
+                type='RankSort', loss_weight=1.0), *args, **kwargs):
         super(RankBasedShared2FCBBoxHead, self).__init__(
             num_shared_convs=0,
             num_shared_fcs=2,
@@ -252,12 +253,12 @@ class RankBasedShared2FCBBoxHead(ConvFCBBoxHead):
             **kwargs)
         self.fc_cls = nn.Linear(self.cls_last_dim, self.num_classes)
         self.rank_loss_type = rank_loss_type
-        if self.rank_loss_type == 'RankSort':
-            self.loss_rank = ranking_losses.RankSort()
-        elif self.rank_loss_type == 'BucketedRankSort':
-            self.loss_rank = ranking_losses.BucketedRankSort()
-        elif self.rank_loss_type == 'aLRP':
-            self.loss_rank = ranking_losses.aLRPLoss()
+        if self.rank_loss_type['type'] == 'RankSort':
+            self.loss_rank = build_loss(rank_loss_type)
+        elif self.rank_loss_type['type'] == 'BucketedRankSort':
+            self.loss_rank = build_loss(rank_loss_type)
+        elif self.rank_loss_type['type'] == 'aLRP':
+            self.loss_rank = build_loss(rank_loss_type)
             self.SB_weight = 50
             self.period = 7330
             self.cls_LRP_hist = collections.deque(maxlen=self.period)
@@ -295,7 +296,7 @@ class RankBasedShared2FCBBoxHead(ConvFCBBoxHead):
 
                 loss_bbox = self.loss_bbox(pos_bbox_pred, pos_target)
 
-                if self.rank_loss_type == 'RankSort' or self.rank_loss_type == 'BucketedRankSort':
+                if self.rank_loss_type['type'] == 'RankSort' or self.rank_loss_type['type'] == 'BucketedRankSort':
                     bbox_weights = cls_score.detach().sigmoid().max(dim=1)[0][pos_inds]
 
                     IoU_targets = bbox_overlaps(pos_bbox_pred.detach(), pos_target, is_aligned=True)
@@ -312,7 +313,7 @@ class RankBasedShared2FCBBoxHead(ConvFCBBoxHead):
                     losses_bbox *= self.SB_weight
                     return dict(loss_roi_rank=ranking_loss, loss_roi_sort=sorting_loss, loss_roi_bbox=losses_bbox), bbox_weights
 
-                elif self.rank_loss_type == 'aLRP':
+                elif self.rank_loss_type['type'] == 'aLRP':
                     losses_cls, rank, order = self.loss_rank.apply(flat_preds, flat_labels, loss_bbox.detach())
                     
                     # Order the regression losses considering the scores. 
@@ -336,7 +337,7 @@ class RankBasedShared2FCBBoxHead(ConvFCBBoxHead):
                     return dict(loss_cls=losses_cls, loss_bbox=losses_bbox), None
             else:
                 losses_bbox=bbox_pred.sum()*0+1
-                if self.rank_loss_type == 'RankSort' or self.rank_loss_type == 'BucketedRankSort':
+                if self.rank_loss_type['type'] == 'RankSort' or self.rank_loss_type['type'] == 'BucketedRankSort':
                     ranking_loss = cls_score.sum()*0+1
                     sorting_loss = cls_score.sum()*0+1
                     return dict(loss_roi_rank=ranking_loss, loss_roi_sort=sorting_loss, loss_roi_bbox=losses_bbox), bbox_weights
@@ -346,7 +347,7 @@ class RankBasedShared2FCBBoxHead(ConvFCBBoxHead):
 
         else:
             losses_bbox=bbox_pred.sum()*0+1
-            if self.rank_loss_type == 'RankSort' or self.rank_loss_type == 'BucketedRankSort':
+            if self.rank_loss_type['type'] == 'RankSort' or self.rank_loss_type['type'] == 'BucketedRankSort':
                 ranking_loss = cls_score.sum()*0+1
                 sorting_loss = cls_score.sum()*0+1
                 return dict(loss_roi_rank=ranking_loss, loss_roi_sort=sorting_loss, loss_roi_bbox=losses_bbox), bbox_weights

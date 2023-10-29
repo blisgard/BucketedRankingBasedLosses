@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from mmcv.cnn import normal_init
 from mmcv.ops import batched_nms
 from mmdet.core import vectorize_labels, bbox_overlaps
-from ..builder import HEADS
+from ..builder import HEADS, build_loss
 from .anchor_head import AnchorHead
 from .rpn_test_mixin import RPNTestMixin
 import numpy as np
@@ -27,16 +27,17 @@ class RankBasedRPNHead(RPNTestMixin, AnchorHead):
         in_channels (int): Number of channels in the input feature map.
     """  # noqa: W605
 
-    def __init__(self, in_channels, head_weight=0.20, rank_loss_type = 'RankSort', **kwargs):
+    def __init__(self, in_channels, head_weight=0.20, rank_loss_type = dict(
+                type='RankSort', loss_weight=1.0), **kwargs):
         super(RankBasedRPNHead, self).__init__(1, in_channels, **kwargs)
         self.head_weight = head_weight
         self.rank_loss_type = rank_loss_type
-        if self.rank_loss_type == 'RankSort':
-            self.loss_rank = ranking_losses.RankSort()
-        elif self.rank_loss_type == 'BucketedRankSort':
-            self.loss_rank = ranking_losses.BucketedRankSort()
-        elif self.rank_loss_type == 'aLRP':
-            self.loss_rank = ranking_losses.aLRPLoss()
+        if self.rank_loss_type['type'] == 'RankSort':
+            self.loss_rank = build_loss(rank_loss_type)
+        elif self.rank_loss_type['type'] == 'BucketedRankSort':
+            self.loss_rank = build_loss(rank_loss_type)
+        elif self.rank_loss_type['type'] == 'aLRP':
+            self.loss_rank = build_loss(rank_loss_type)
             self.SB_weight = 50
             self.period = 7330
             self.cls_LRP_hist = collections.deque(maxlen=self.period)
@@ -144,7 +145,7 @@ class RankBasedRPNHead(RPNTestMixin, AnchorHead):
             # flat_labels = self.flatten_labels(cls_labels, torch.cat(all_label_weights))
             flat_labels = vectorize_labels(cls_labels, self.num_classes, torch.cat(all_label_weights))
             flat_preds = all_scores.reshape(-1)
-            if self.rank_loss_type == 'RankSort' or self.rank_loss_type == 'BucketedRankSort':
+            if self.rank_loss_type['type'] == 'RankSort' or self.rank_loss_type['type'] == 'BucketedRankSort':
                 print("RPN")
                 pos_weights = all_scores.detach().sigmoid().max(dim=1)[0][pos_idx]
 
@@ -160,7 +161,7 @@ class RankBasedRPNHead(RPNTestMixin, AnchorHead):
                 loss_bbox *= self.SB_weight
                 return dict(loss_rpn_rank=self.head_weight*ranking_loss, loss_rpn_sort=self.head_weight*sorting_loss, loss_rpn_bbox=self.head_weight*loss_bbox)
 
-            elif self.rank_loss_type == 'aLRP':
+            elif self.rank_loss_type['type'] == 'aLRP':
                 e_loc = loss_bbox.detach()/(2*(1-0.7))
                 losses_cls, rank, order = self.loss_rank.apply(flat_preds, flat_labels, e_loc)
                 
@@ -185,7 +186,7 @@ class RankBasedRPNHead(RPNTestMixin, AnchorHead):
 
         else:
             losses_bbox=torch.cat(all_bbox_preds).sum()*0+1
-            if self.rank_loss_type == 'RankSort' or self.rank_loss_type == 'BucketedRankSort':
+            if self.rank_loss_type['type'] == 'RankSort' or self.rank_loss_type['type'] == 'BucketedRankSort':
                 ranking_loss = all_scores.sum()*0+1
                 sorting_loss = all_scores.sum()*0+1
                 return dict(loss_rpn_rank=self.head_weight*ranking_loss, loss_rpn_sort=self.head_weight*sorting_loss, loss_rpn_bbox=self.head_weight*losses_bbox)

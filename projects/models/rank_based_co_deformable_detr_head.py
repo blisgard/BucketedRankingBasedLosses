@@ -8,7 +8,7 @@ from mmdet.core import (bbox_cxcywh_to_xyxy, bbox_xyxy_to_cxcywh,
                         build_assigner, build_sampler, multi_apply,
                         reduce_mean, bbox_overlaps, vectorize_labels)
 from mmdet.models.utils.transformer import inverse_sigmoid
-from mmdet.models.builder import HEADS
+from mmdet.models.builder import HEADS, build_loss
 from mmdet.models.dense_heads.detr_head import DETRHead
 from mmdet.models.losses import ranking_losses
 
@@ -19,13 +19,17 @@ from mmdet.core import bbox_mapping_back, merge_aug_proposals
 if sys.version_info >= (3, 7):
     from mmdet.utils.contextmanagers import completed
 
+EPS = 1e-12
 
 @HEADS.register_module()
-class CoDeformDETRHead(DETRHead):
+class RankBasedCoDeformDETRHead(DETRHead):
     def __init__(self,
                  *args,
                  max_pos_coords=300,
                  lambda_1=1,
+                 rank_loss_type = dict(
+                     type='RankSort',
+                     loss_weight=1.0),
                  with_box_refine=False,
                  as_two_stage=False,
                  mixed_selection=False,
@@ -39,14 +43,15 @@ class CoDeformDETRHead(DETRHead):
         self.mixed_selection = mixed_selection
         self.use_zero_padding = use_zero_padding
         
+        self.loss_rank = build_loss(rank_loss_type)
 
+        
         if self.as_two_stage:
             transformer['as_two_stage'] = self.as_two_stage
         if self.mixed_selection:
             transformer['mixed_selection'] = self.mixed_selection
-        super(CoDeformDETRHead, self).__init__(
+        super(RankBasedCoDeformDETRHead, self).__init__(
             *args, transformer=transformer, **kwargs)
-        
 
 
     def _init_layers(self):
@@ -326,53 +331,77 @@ class CoDeformDETRHead(DETRHead):
         except:
             return cls_scores.mean()*0, cls_scores.mean()*0, cls_scores.mean()*0
 
+
         bg_class_ind = self.num_classes
         num_total_pos = len(((labels >= 0) & (labels < bg_class_ind)).nonzero().squeeze(1))
+        pos_inds = ((labels >= 0) & (labels < bg_class_ind)).nonzero().squeeze(1)
         num_total_neg = num_imgs*num_q - num_total_pos
 
-        # classification loss
-        cls_scores = cls_scores.reshape(-1, self.cls_out_channels)
-        # construct weighted avg_factor to match with the official DETR repo
-        cls_avg_factor = num_total_pos * 1.0 + \
-            num_total_neg * self.bg_cls_weight
-        if self.sync_cls_avg_factor:
-            cls_avg_factor = reduce_mean(
-                cls_scores.new_tensor([cls_avg_factor]))
-        cls_avg_factor = max(cls_avg_factor, 1)
-        
-        loss_cls = self.loss_cls(
-            cls_scores, labels, label_weights, avg_factor=cls_avg_factor)
+        if num_total_pos > 0:
+            # classification loss
+            cls_scores = cls_scores.reshape(-1, self.cls_out_channels)
+            # construct weighted avg_factor to match with the official DETR repo
+            cls_avg_factor = num_total_pos * 1.0 + \
+                num_total_neg * self.bg_cls_weight
+            if self.sync_cls_avg_factor:
+                cls_avg_factor = reduce_mean(
+                    cls_scores.new_tensor([cls_avg_factor]))
+            cls_avg_factor = max(cls_avg_factor, 1)
+            
+            flat_labels = vectorize_labels(labels, self.num_classes, label_weights)
+            flat_preds = cls_scores.reshape(-1)
+            loss_cls = self.loss_cls(
+                cls_scores, labels, label_weights, avg_factor=cls_avg_factor)
 
-        # Compute the average number of gt boxes across all gpus, for
-        # normalization purposes
-        num_total_pos = loss_cls.new_tensor([num_total_pos])
-        num_total_pos = torch.clamp(reduce_mean(num_total_pos), min=1).item()
+            # Compute the average number of gt boxes across all gpus, for
+            # normalization purposes
+            num_total_pos = loss_cls.new_tensor([num_total_pos])
+            num_total_pos = torch.clamp(reduce_mean(num_total_pos), min=1).item()
 
-        # construct factors used for rescale bboxes
-        factors = []
-        for img_meta, bbox_pred in zip(img_metas, bbox_preds):
-            img_h, img_w, _ = img_meta['img_shape']
-            factor = bbox_pred.new_tensor([img_w, img_h, img_w,
-                                           img_h]).unsqueeze(0).repeat(
-                                               bbox_pred.size(0), 1)
-            factors.append(factor)
-        factors = torch.cat(factors, 0)
+            # construct factors used for rescale bboxes
+            factors = []
+            for img_meta, bbox_pred in zip(img_metas, bbox_preds):
+                img_h, img_w, _ = img_meta['img_shape']
+                factor = bbox_pred.new_tensor([img_w, img_h, img_w,
+                                            img_h]).unsqueeze(0).repeat(
+                                                bbox_pred.size(0), 1)
+                factors.append(factor)
+            factors = torch.cat(factors, 0)
 
-        # DETR regress the relative position of boxes (cxcywh) in the image,
-        # thus the learning target is normalized by the image size. So here
-        # we need to re-scale them for calculating IoU loss
-        bbox_preds = bbox_preds.reshape(-1, 4)
-        bboxes = bbox_cxcywh_to_xyxy(bbox_preds) * factors
-        bboxes_gt = bbox_cxcywh_to_xyxy(bbox_targets) * factors
+            # DETR regress the relative position of boxes (cxcywh) in the image,
+            # thus the learning target is normalized by the image size. So here
+            # we need to re-scale them for calculating IoU loss
+            bbox_preds = bbox_preds.reshape(-1, 4)
 
-        # regression IoU loss, defaultly GIoU loss
-        loss_iou = self.loss_iou(
-            bboxes, bboxes_gt, bbox_weights, avg_factor=num_total_pos)
+            bboxes = bbox_cxcywh_to_xyxy(bbox_preds) * factors
+            bboxes_gt = bbox_cxcywh_to_xyxy(bbox_targets) * factors
 
-        # regression L1 loss
-        loss_bbox = self.loss_bbox(
-            bbox_preds, bbox_targets, bbox_weights, avg_factor=num_total_pos)
-        return loss_cls*self.lambda_1, loss_bbox*self.lambda_1, loss_iou*self.lambda_1
+            pos_bbox_pred = bboxes[pos_inds]
+            pos_bbox_targets = bboxes_gt[pos_inds]
+            
+            IoU_targets = bbox_overlaps(pos_bbox_pred, pos_bbox_targets, is_aligned=True)
+            flat_labels[flat_labels==1]=IoU_targets
+
+            ranking_loss, sorting_loss = self.loss_rank.apply(flat_preds, flat_labels, 0.5)
+
+            # regression IoU loss, defaultly GIoU loss
+            loss_iou = self.loss_iou(
+                bboxes, bboxes_gt, bbox_weights, avg_factor=num_total_pos)
+
+            # regression L1 loss
+            loss_bbox = self.loss_bbox(
+                bbox_preds, bbox_targets, bbox_weights, avg_factor=num_total_pos)
+            
+            bbox_avg_factor = torch.sum(bbox_weights)
+            if bbox_avg_factor < EPS:
+                bbox_avg_factor = 1
+                
+            losses_bbox = torch.sum(bbox_weights*loss_bbox)/bbox_avg_factor
+
+            self.SB_weight = (ranking_loss+sorting_loss).detach()/float(losses_bbox.item())
+            losses_bbox *= self.SB_weight
+
+            return ranking_loss*self.lambda_1, sorting_loss*self.lambda_1, loss_bbox*self.lambda_1, loss_iou*self.lambda_1
 
     def get_aux_targets(self, pos_coords, img_metas, mlvl_feats, head_idx):
         coords, labels, targets = pos_coords[:3]
@@ -577,7 +606,7 @@ class CoDeformDETRHead(DETRHead):
         all_gt_bboxes_ignore_list = [
             gt_bboxes_ignore for _ in range(num_dec_layers)
         ]
-        losses_cls, losses_bbox, losses_iou = multi_apply(
+        losses_rank, losses_sort, losses_bbox, losses_iou = multi_apply(
             self.loss_single_aux, all_cls_scores, all_bbox_preds,
             all_labels, all_label_weights, all_bbox_targets, 
             all_bbox_weights, img_metas_list, all_gt_bboxes_ignore_list)
@@ -586,15 +615,18 @@ class CoDeformDETRHead(DETRHead):
         # loss of proposal generated from encode feature map.
 
         # loss from the last decoder layer
-        loss_dict['loss_cls_aux'] = losses_cls[-1]
+        loss_dict['loss_rank_aux'] = losses_rank[-1]
+        loss_dict['loss_sort_aux'] = losses_sort[-1]
         loss_dict['loss_bbox_aux'] = losses_bbox[-1]
         loss_dict['loss_iou_aux'] = losses_iou[-1]
         # loss from other decoder layers
         num_dec_layer = 0
-        for loss_cls_i, loss_bbox_i, loss_iou_i in zip(losses_cls[:-1],
+        for loss_rank_i, loss_sort_i,loss_bbox_i, loss_iou_i in zip(losses_rank[:-1],
+                                                                    losses_sort[:-1],
                                                        losses_bbox[:-1],
                                                        losses_iou[:-1]):
-            loss_dict[f'd{num_dec_layer}.loss_cls_aux'] = loss_cls_i
+            loss_dict[f'd{num_dec_layer}.loss_rank_aux'] = loss_rank_i
+            loss_dict[f'd{num_dec_layer}.loss_sort_aux'] = loss_sort_i            
             loss_dict[f'd{num_dec_layer}.loss_bbox_aux'] = loss_bbox_i
             loss_dict[f'd{num_dec_layer}.loss_iou_aux'] = loss_iou_i
             num_dec_layer += 1
@@ -689,7 +721,7 @@ class CoDeformDETRHead(DETRHead):
         ]
         img_metas_list = [img_metas for _ in range(num_dec_layers)]
 
-        losses_cls, losses_bbox, losses_iou = multi_apply(
+        losses_rank, losses_sort, losses_bbox, losses_iou = multi_apply(
             self.loss_single, all_cls_scores, all_bbox_preds,
             all_gt_bboxes_list, all_gt_labels_list, img_metas_list,
             all_gt_bboxes_ignore_list)
@@ -701,24 +733,28 @@ class CoDeformDETRHead(DETRHead):
                 torch.zeros_like(gt_labels_list[i])
                 for i in range(len(img_metas))
             ]
-            enc_loss_cls, enc_losses_bbox, enc_losses_iou = \
+            enc_loss_rank, enc_loss_sort, enc_losses_bbox, enc_losses_iou = \
                 self.loss_single(enc_cls_scores, enc_bbox_preds,
                                  gt_bboxes_list, binary_labels_list,
                                  img_metas, gt_bboxes_ignore)
-            loss_dict['enc_loss_cls'] = enc_loss_cls
+            loss_dict['enc_loss_rank'] = enc_loss_rank
+            loss_dict['enc_loss_sort'] = enc_loss_sort
             loss_dict['enc_loss_bbox'] = enc_losses_bbox
             loss_dict['enc_loss_iou'] = enc_losses_iou
 
         # loss from the last decoder layer
-        loss_dict['loss_cls'] = losses_cls[-1]
+        loss_dict['loss_rank'] = losses_rank[-1]
+        loss_dict['loss_sort'] = losses_sort[-1]
         loss_dict['loss_bbox'] = losses_bbox[-1]
         loss_dict['loss_iou'] = losses_iou[-1]
         # loss from other decoder layers
         num_dec_layer = 0
-        for loss_cls_i, loss_bbox_i, loss_iou_i in zip(losses_cls[:-1],
+        for loss_rank_i, loss_sort_i, loss_bbox_i, loss_iou_i in zip(losses_rank[:-1],
+                                                                     losses_sort[:-1],
                                                        losses_bbox[:-1],
                                                        losses_iou[:-1]):
-            loss_dict[f'd{num_dec_layer}.loss_cls'] = loss_cls_i
+            loss_dict[f'd{num_dec_layer}.loss_rank_i'] = loss_rank_i
+            loss_dict[f'd{num_dec_layer}.loss_sort_i'] = loss_sort_i
             loss_dict[f'd{num_dec_layer}.loss_bbox'] = loss_bbox_i
             loss_dict[f'd{num_dec_layer}.loss_iou'] = loss_iou_i
             num_dec_layer += 1
@@ -819,51 +855,72 @@ class CoDeformDETRHead(DETRHead):
         bbox_targets = torch.cat(bbox_targets_list, 0)
         bbox_weights = torch.cat(bbox_weights_list, 0)
 
-        # classification loss
-        cls_scores = cls_scores.reshape(-1, self.cls_out_channels)
-        # construct weighted avg_factor to match with the official DETR repo
-        cls_avg_factor = num_total_pos * 1.0 + \
-            num_total_neg * self.bg_cls_weight
-        if self.sync_cls_avg_factor:
-            cls_avg_factor = reduce_mean(
-                cls_scores.new_tensor([cls_avg_factor]))
-        cls_avg_factor = max(cls_avg_factor, 1)
+        if num_total_pos > 0:
+            # classification loss
+            cls_scores = cls_scores.reshape(-1, self.cls_out_channels)
+            # construct weighted avg_factor to match with the official DETR repo
+            cls_avg_factor = num_total_pos * 1.0 + \
+                num_total_neg * self.bg_cls_weight
+            if self.sync_cls_avg_factor:
+                cls_avg_factor = reduce_mean(
+                    cls_scores.new_tensor([cls_avg_factor]))
+            cls_avg_factor = max(cls_avg_factor, 1)
 
-        flat_labels = vectorize_labels(labels, self.num_classes, label_weights)
-        flat_preds = cls_scores.reshape(-1)
-        loss_cls = self.loss_cls(
-            cls_scores, labels, label_weights, avg_factor=cls_avg_factor)
+            flat_labels = vectorize_labels(labels, self.num_classes, label_weights)
+            flat_preds = cls_scores.reshape(-1)
+            loss_cls = self.loss_cls(
+                cls_scores, labels, label_weights, avg_factor=cls_avg_factor)
 
-        # Compute the average number of gt boxes across all gpus, for
-        # normalization purposes
-        num_total_pos = loss_cls.new_tensor([num_total_pos])
-        num_total_pos = torch.clamp(reduce_mean(num_total_pos), min=1).item()
+            # Compute the average number of gt boxes across all gpus, for
+            # normalization purposes
+            num_total_pos = loss_cls.new_tensor([num_total_pos])
+            num_total_pos = torch.clamp(reduce_mean(num_total_pos), min=1).item()
+            bg_class_ind = self.num_classes
+            pos_inds = ((labels >= 0) & (labels < bg_class_ind)).nonzero().squeeze(1)
+            # construct factors used for rescale bboxes
+            factors = []
+            for img_meta, bbox_pred in zip(img_metas, bbox_preds):
+                img_h, img_w, _ = img_meta['img_shape']
+                factor = bbox_pred.new_tensor([img_w, img_h, img_w,
+                                            img_h]).unsqueeze(0).repeat(
+                                                bbox_pred.size(0), 1)
+                factors.append(factor)
+            factors = torch.cat(factors, 0)
 
-        # construct factors used for rescale bboxes
-        factors = []
-        for img_meta, bbox_pred in zip(img_metas, bbox_preds):
-            img_h, img_w, _ = img_meta['img_shape']
-            factor = bbox_pred.new_tensor([img_w, img_h, img_w,
-                                           img_h]).unsqueeze(0).repeat(
-                                               bbox_pred.size(0), 1)
-            factors.append(factor)
-        factors = torch.cat(factors, 0)
+            # DETR regress the relative position of boxes (cxcywh) in the image,
+            # thus the learning target is normalized by the image size. So here
+            # we need to re-scale them for calculating IoU loss
+            bbox_preds = bbox_preds.reshape(-1, 4)
+            bboxes = bbox_cxcywh_to_xyxy(bbox_preds) * factors
+            bboxes_gt = bbox_cxcywh_to_xyxy(bbox_targets) * factors
 
-        # DETR regress the relative position of boxes (cxcywh) in the image,
-        # thus the learning target is normalized by the image size. So here
-        # we need to re-scale them for calculating IoU loss
-        bbox_preds = bbox_preds.reshape(-1, 4)
-        bboxes = bbox_cxcywh_to_xyxy(bbox_preds) * factors
-        bboxes_gt = bbox_cxcywh_to_xyxy(bbox_targets) * factors
+            pos_bbox_pred = bboxes[pos_inds]
+            pos_bbox_targets = bboxes_gt[pos_inds]
 
-        # regression IoU loss, defaultly GIoU loss
-        loss_iou = self.loss_iou(
-            bboxes, bboxes_gt, bbox_weights, avg_factor=num_total_pos)
+            IoU_targets = bbox_overlaps(pos_bbox_pred, pos_bbox_targets, is_aligned=True)
+            flat_labels[flat_labels==1]=IoU_targets
 
-        # regression L1 loss
-        loss_bbox = self.loss_bbox(
-            bbox_preds, bbox_targets, bbox_weights, avg_factor=num_total_pos)
-        return loss_cls, loss_bbox, loss_iou
+            ranking_loss, sorting_loss = self.loss_rank.apply(flat_preds, flat_labels, 0.5)
+
+            # regression L1 loss
+            loss_bbox = self.loss_bbox(
+                bbox_preds, bbox_targets, bbox_weights, avg_factor=num_total_pos)
+
+            bbox_avg_factor = torch.sum(bbox_weights)
+            if bbox_avg_factor < EPS:
+                bbox_avg_factor = 1
+                
+            losses_bbox = torch.sum(bbox_weights*loss_bbox)/bbox_avg_factor
+
+            self.SB_weight = (ranking_loss+sorting_loss).detach()/float(losses_bbox.item())
+            losses_bbox *= self.SB_weight
+
+            # regression IoU loss, defaultly GIoU loss
+            loss_iou = self.loss_iou(
+                bboxes, bboxes_gt, bbox_weights, avg_factor=num_total_pos)
+
+
+            return ranking_loss, sorting_loss, loss_bbox, loss_iou
 
     def get_targets(self,
                     cls_scores_list,

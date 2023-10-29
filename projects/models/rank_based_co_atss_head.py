@@ -9,6 +9,9 @@ from mmdet.models.builder import HEADS, build_loss
 from mmdet.models.dense_heads.anchor_head import AnchorHead
 from mmdet.models.losses import ranking_losses
 
+EPS = 1e-12
+
+
 @HEADS.register_module()
 class RankBasedCoATSSHead(AnchorHead):
     """Bridging the Gap Between Anchor-based and Anchor-free Detection via
@@ -141,104 +144,7 @@ class RankBasedCoATSSHead(AnchorHead):
         bbox_pred = scale(self.atss_reg(reg_feat)).float()
         return cls_score, bbox_pred
 
-    def loss_single(self, anchors, cls_score, bbox_pred, labels,
-                    label_weights, bbox_targets, img_metas, num_total_samples, flat_labels, flat_preds):
-        """Compute loss of a single scale level.
-
-        Args:
-            cls_score (Tensor): Box scores for each scale level
-                Has shape (N, num_anchors * num_classes, H, W).
-                
-            bbox_pred (Tensor): Box energies / deltas for each scale
-                level with shape (N, num_anchors * 4, H, W).
-            anchors (Tensor): Box reference for each scale level with shape
-                (N, num_total_anchors, 4).
-            labels (Tensor): Labels of each anchors with shape
-                (N, num_total_anchors).
-            label_weights (Tensor): Label weights of each anchor with shape
-                (N, num_total_anchors)
-            bbox_targets (Tensor): BBox regression targets of each anchor
-                weight shape (N, num_total_anchors, 4).
-            num_total_samples (int): Number os positive samples that is
-                reduced over all GPUs.
-
-        Returns:
-            dict[str, Tensor]: A dictionary of loss components.
-        """
-
-        anchors = anchors.reshape(-1, 4)
-        temp_cls_score = cls_score
-        cls_score = cls_score.permute(0, 2, 3, 1).reshape(
-            -1, self.cls_out_channels).contiguous()
-        bbox_pred = bbox_pred.permute(0, 2, 3, 1).reshape(-1, 4)
-        bbox_targets = bbox_targets.reshape(-1, 4)
-        labels = labels.reshape(-1)
-        label_weights = label_weights.reshape(-1)
-
-        
-            
-        # classification loss
-        '''
-        loss_cls = self.loss_cls(
-            cls_score, labels, label_weights, avg_factor=num_total_samples)
-        '''
-        if self.rank_loss_type['type'] == 'BucketedRankSort' or self.rank_loss_type['type'] == 'RankSort':
-            #ranking_loss, sorting_loss = self.loss_cls.apply(flat_preds,flat_labels, 0.5)
-
-            ranking_loss, sorting_loss = self.loss_rank.apply(flat_preds, flat_labels, 0.5)
-
-            # FG cat_id: [0, num_classes -1], BG cat_id: num_classes
-            bg_class_ind = self.num_classes
-            pos_inds = ((labels >= 0)
-                        & (labels < bg_class_ind)).nonzero().squeeze(1)
-
-            if len(pos_inds) > 0:
-                pos_bbox_targets = bbox_targets[pos_inds]
-                pos_bbox_pred = bbox_pred[pos_inds]
-                pos_anchors = anchors[pos_inds]
-
-                pos_decode_bbox_pred = self.bbox_coder.decode(
-                    pos_anchors, pos_bbox_pred)
-
-
-
-                # regression loss
-                loss_bbox = self.loss_bbox(
-                    pos_decode_bbox_pred,
-                    pos_bbox_targets)
-                
-
-            else:
-                loss_bbox = bbox_pred.sum() * 0
-                
-
-            return ranking_loss, sorting_loss, loss_bbox
-        else:
-            loss_cls = self.loss_cls(cls_score, labels, label_weights, avg_factor=num_total_samples)
-            bg_class_ind = self.num_classes
-            pos_inds = ((labels >= 0)
-                        & (labels < bg_class_ind)).nonzero().squeeze(1)
-
-            if len(pos_inds) > 0:
-                pos_bbox_targets = bbox_targets[pos_inds]
-                pos_bbox_pred = bbox_pred[pos_inds]
-                pos_anchors = anchors[pos_inds]
-
-                pos_decode_bbox_pred = self.bbox_coder.decode(
-                    pos_anchors, pos_bbox_pred)
-
-                # regression loss
-                loss_bbox = self.loss_bbox(
-                    pos_decode_bbox_pred,
-                    pos_bbox_targets)
-
-                
-
-            else:
-                loss_bbox = bbox_pred.sum() * 0
-                
-
-            return loss_cls, loss_bbox
+ 
 
     @force_fp32(apply_to=('cls_scores', 'bbox_preds'))
     def loss(self,
@@ -317,63 +223,51 @@ class RankBasedCoATSSHead(AnchorHead):
         bg_class_ind = self.num_classes
         pos_inds = ((cls_labels >= 0)
                     & (cls_labels < bg_class_ind)).nonzero().squeeze(1)
-        pos_bbox_targets = torch.cat(all_bbox_targets)[pos_inds]
-        pos_bbox_pred = torch.cat(all_bbox_preds)[pos_inds]
-        pos_anchors = torch.cat(all_anchors)[pos_inds]
-        bbox_weights = (all_cls_scores.detach().sigmoid().max(dim=1)[0][pos_inds])
-        pos_decode_bbox_pred = self.bbox_coder.decode(
+        
+        print("ATSS")
+        if len(pos_inds) > 0:
+            pos_bbox_targets = torch.cat(all_bbox_targets)[pos_inds]
+            pos_bbox_pred = torch.cat(all_bbox_preds)[pos_inds]
+            pos_anchors = torch.cat(all_anchors)[pos_inds]
+            bbox_weights = (all_cls_scores.detach().sigmoid().max(dim=1)[0][pos_inds])
+
+            pos_decode_bbox_pred = self.bbox_coder.decode(
                 pos_anchors, pos_bbox_pred)
-        pos_decode_bbox_targets = self.bbox_coder.decode(
-                pos_anchors, pos_bbox_targets)
-        flat_labels = vectorize_labels(cls_labels, self.num_classes, torch.cat(all_label_weights))
-        flat_preds = all_cls_scores.reshape(-1)
-        IoU_targets = bbox_overlaps(pos_decode_bbox_pred.detach(), pos_bbox_targets, is_aligned=True)
-        flat_labels[flat_labels==1]=IoU_targets
+        
 
+            # regression loss
+            loss_bbox = self.loss_bbox(
+                pos_decode_bbox_pred,
+                pos_bbox_targets) 
 
-        if self.rank_loss_type['type'] == 'RankSort' or self.rank_loss_type['type'] == 'BucketedRankSort':
-            print("ATSS")
-            loss_rank,loss_sort, losses_bbox = multi_apply(
-                    self.loss_single,
-                    anchor_list,
-                    cls_scores,
-                    bbox_preds,
-                    labels_list,
-                    label_weights_list,
-                    bbox_targets_list,
-                    new_img_metas,
-                    num_total_samples=num_total_samples, flat_labels=flat_labels, flat_preds=flat_preds)
+            # classification component
+            flat_labels = vectorize_labels(cls_labels, self.num_classes, torch.cat(all_label_weights))
+            flat_preds = all_cls_scores.reshape(-1)
+            IoU_targets = bbox_overlaps(pos_decode_bbox_pred.detach(), pos_bbox_targets, is_aligned=True)
+
+            flat_labels[flat_labels==1]=IoU_targets
+
+            ranking_loss, sorting_loss = self.loss_rank.apply(flat_preds, flat_labels, 0.5)
+            
             bbox_avg_factor = torch.sum(bbox_weights)
-            bbox_avg_factor = reduce_mean(bbox_avg_factor).clamp_(min=1).item()
-            losses_bbox = list(map(lambda x: x / bbox_avg_factor, losses_bbox))
+            if bbox_avg_factor < EPS:
+                bbox_avg_factor = 1
+                
+            losses_bbox = torch.sum(bbox_weights*loss_bbox)/bbox_avg_factor
+
+            self.SB_weight = (ranking_loss+sorting_loss).detach()/float(losses_bbox.item())
+            losses_bbox *= self.SB_weight
 
             pos_coords = (ori_anchors, ori_labels, ori_bbox_targets, 'atss')
-            return dict(
-                loss_rank=loss_rank,
-                loss_sort=loss_sort,
-                loss_bbox=losses_bbox,
-                pos_coords=pos_coords)
+            return dict(loss_rank=ranking_loss, loss_sort=sorting_loss,loss_bbox=losses_bbox,pos_coords=pos_coords)
+        
         else:
-            losses_cls, losses_bbox = multi_apply(
-                self.loss_single,
-                anchor_list,
-                cls_scores,
-                bbox_preds,
-                labels_list,
-                label_weights_list,
-                bbox_targets_list,
-                new_img_metas,
-                num_total_samples=num_total_samples, flat_labels=flat_labels, flat_preds=flat_preds)
+            losses_bbox = torch.cat(bbox_preds).sum() * 0
+            ranking_loss = torch.cat(cls_scores).sum() * 0
+            sorting_loss = torch.cat(cls_scores).sum() * 0
+            pos_coords = (ori_anchors, ori_labels, ori_bbox_targets, 'atss')
+            return dict(loss_rank=ranking_loss, loss_sort=sorting_loss, loss_bbox=losses_bbox)
 
-        bbox_avg_factor = torch.sum(bbox_weights)
-        bbox_avg_factor = reduce_mean(bbox_avg_factor).clamp_(min=1).item()
-        losses_bbox = list(map(lambda x: x / bbox_avg_factor, losses_bbox))
-
-        pos_coords = (ori_anchors, ori_labels, ori_bbox_targets, 'atss')
-        return dict(
-            loss_cls=losses_cls,
-            loss_bbox=losses_bbox,
-            pos_coords=pos_coords)
 
     def centerness_target(self, anchors, gts):
         # only calculate pos centerness targets, otherwise there may be nan

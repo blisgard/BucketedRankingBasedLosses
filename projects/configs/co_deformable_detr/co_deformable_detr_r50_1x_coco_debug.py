@@ -46,7 +46,7 @@ model = dict(
             type='CrossEntropyLoss', use_sigmoid=True, loss_weight=1.0*num_dec_layer*lambda_2),
         loss_bbox=dict(type='GIoULoss', loss_weight=1.0*num_dec_layer*lambda_2)),
     query_head=dict(
-        type='CoDeformDETRHead',
+        type='RankBasedCoDeformDETRHead',
         num_query=300,
         num_classes=80,
         in_channels=2048,
@@ -100,6 +100,8 @@ model = dict(
             gamma=2.0,
             alpha=0.25,
             loss_weight=2.0),
+        rank_loss_type = dict(
+                type='RankSort', loss_weight=2.0),
         loss_bbox=dict(type='L1Loss', loss_weight=5.0),
         loss_iou=dict(type='GIoULoss', loss_weight=2.0)),
     roi_head=[dict(

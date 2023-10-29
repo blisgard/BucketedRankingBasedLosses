@@ -213,7 +213,6 @@ class RankBasedATSSHead(AnchorHead):
             all_anchors.append(anc.reshape(-1, 4))
             all_labels.append(labels.reshape(-1))
             all_label_weights.append(label_weights.reshape(-1))
-            print(cls_score.shape)
             all_cls_scores.append(cls_score.permute(0, 2, 3, 1).reshape(-1, self.cls_out_channels))
             
             all_bbox_targets.append(bbox_targets.reshape(-1, 4))
