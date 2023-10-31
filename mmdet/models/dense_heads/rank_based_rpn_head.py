@@ -10,7 +10,6 @@ from .rpn_test_mixin import RPNTestMixin
 import numpy as np
 import collections
 
-from mmdet.models.losses import ranking_losses
 import pdb
 
 @HEADS.register_module()
@@ -28,7 +27,7 @@ class RankBasedRPNHead(RPNTestMixin, AnchorHead):
     """  # noqa: W605
 
     def __init__(self, in_channels, head_weight=0.20, rank_loss_type = dict(
-                type='RankSort', loss_weight=1.0), **kwargs):
+                type='BucketedRankSort', loss_weight=1.0), **kwargs):
         super(RankBasedRPNHead, self).__init__(1, in_channels, **kwargs)
         self.head_weight = head_weight
         self.rank_loss_type = rank_loss_type
@@ -159,7 +158,8 @@ class RankBasedRPNHead(RPNTestMixin, AnchorHead):
                 ranking_loss, sorting_loss = self.loss_rank.apply(flat_preds, flat_labels)
                 self.SB_weight = (ranking_loss+sorting_loss).detach()/float(loss_bbox.item())
                 loss_bbox *= self.SB_weight
-                return dict(loss_rpn_rank=self.head_weight*ranking_loss, loss_rpn_sort=self.head_weight*sorting_loss, loss_rpn_bbox=self.head_weight*loss_bbox)
+                weight = self.rank_loss_type['loss_weight']
+                return dict(loss_rpn_rank=self.head_weight*ranking_loss*weight, loss_rpn_sort=self.head_weight*sorting_loss*weight, loss_rpn_bbox=self.head_weight*loss_bbox*weight)
 
             elif self.rank_loss_type['type'] == 'aLRP':
                 e_loc = loss_bbox.detach()/(2*(1-0.7))
@@ -189,7 +189,8 @@ class RankBasedRPNHead(RPNTestMixin, AnchorHead):
             if self.rank_loss_type['type'] == 'RankSort' or self.rank_loss_type['type'] == 'BucketedRankSort':
                 ranking_loss = all_scores.sum()*0+1
                 sorting_loss = all_scores.sum()*0+1
-                return dict(loss_rpn_rank=self.head_weight*ranking_loss, loss_rpn_sort=self.head_weight*sorting_loss, loss_rpn_bbox=self.head_weight*losses_bbox)
+                weight = self.rank_loss_type['loss_weight']
+                return dict(loss_rpn_rank=self.head_weight*ranking_loss*weight, loss_rpn_sort=self.head_weight*sorting_loss*weight, loss_rpn_bbox=self.head_weight*losses_bbox*weight)
             else:
                 losses_cls = all_scores.sum()*0+1
                 return dict(loss_rpn_cls=self.head_weight*losses_cls, loss_rpn_bbox=self.head_weight*losses_bbox)

@@ -240,7 +240,7 @@ class Shared4Conv1FCBBoxHead(ConvFCBBoxHead):
 class RankBasedShared2FCBBoxHead(ConvFCBBoxHead):
 
     def __init__(self, fc_out_channels=1024, rank_loss_type = dict(
-                type='RankSort', loss_weight=1.0), *args, **kwargs):
+                type='RankSort', loss_weight=5.0), *args, **kwargs):
         super(RankBasedShared2FCBBoxHead, self).__init__(
             num_shared_convs=0,
             num_shared_fcs=2,
@@ -311,7 +311,8 @@ class RankBasedShared2FCBBoxHead(ConvFCBBoxHead):
                     losses_bbox = torch.sum(bbox_weights*loss_bbox)/bbox_avg_factor
                     self.SB_weight = (ranking_loss+sorting_loss).detach()/float(losses_bbox.item())
                     losses_bbox *= self.SB_weight
-                    return dict(loss_roi_rank=ranking_loss, loss_roi_sort=sorting_loss, loss_roi_bbox=losses_bbox), bbox_weights
+                    weight = self.rank_loss_type['loss_weight']
+                    return dict(loss_roi_rank=ranking_loss*weight, loss_roi_sort=sorting_loss*weight, loss_roi_bbox=losses_bbox*weight), bbox_weights
 
                 elif self.rank_loss_type['type'] == 'aLRP':
                     losses_cls, rank, order = self.loss_rank.apply(flat_preds, flat_labels, loss_bbox.detach())
@@ -340,7 +341,8 @@ class RankBasedShared2FCBBoxHead(ConvFCBBoxHead):
                 if self.rank_loss_type['type'] == 'RankSort' or self.rank_loss_type['type'] == 'BucketedRankSort':
                     ranking_loss = cls_score.sum()*0+1
                     sorting_loss = cls_score.sum()*0+1
-                    return dict(loss_roi_rank=ranking_loss, loss_roi_sort=sorting_loss, loss_roi_bbox=losses_bbox), bbox_weights
+                    weight = self.rank_loss_type['loss_weight']
+                    return dict(loss_roi_rank=ranking_loss*weight, loss_roi_sort=sorting_loss*weight, loss_roi_bbox=losses_bbox* weight), bbox_weights
                 else:
                     losses_cls = cls_score.sum()*0+1
                     return dict(loss_cls=losses_cls, loss_bbox=losses_bbox), None
@@ -350,7 +352,8 @@ class RankBasedShared2FCBBoxHead(ConvFCBBoxHead):
             if self.rank_loss_type['type'] == 'RankSort' or self.rank_loss_type['type'] == 'BucketedRankSort':
                 ranking_loss = cls_score.sum()*0+1
                 sorting_loss = cls_score.sum()*0+1
-                return dict(loss_roi_rank=ranking_loss, loss_roi_sort=sorting_loss, loss_roi_bbox=losses_bbox), bbox_weights
+                weight = self.rank_loss_type['loss_weight']
+                return dict(loss_roi_rank=ranking_loss*weight, loss_roi_sort=sorting_loss*weight, loss_roi_bbox=losses_bbox*weight), bbox_weights
             else:
                 losses_cls = cls_score.sum()*0+1
                 return dict(loss_cls=losses_cls, loss_bbox=losses_bbox), None

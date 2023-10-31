@@ -47,6 +47,7 @@ class RankBasedCoATSSHead(AnchorHead):
         self.stacked_convs = stacked_convs
         self.conv_cfg = conv_cfg
         self.norm_cfg = norm_cfg
+        
         super(RankBasedCoATSSHead, self).__init__(
             num_classes,
             in_channels,
@@ -224,7 +225,6 @@ class RankBasedCoATSSHead(AnchorHead):
         pos_inds = ((cls_labels >= 0)
                     & (cls_labels < bg_class_ind)).nonzero().squeeze(1)
         
-        print("ATSS")
         if len(pos_inds) > 0:
             pos_bbox_targets = torch.cat(all_bbox_targets)[pos_inds]
             pos_bbox_pred = torch.cat(all_bbox_preds)[pos_inds]
@@ -259,14 +259,16 @@ class RankBasedCoATSSHead(AnchorHead):
             losses_bbox *= self.SB_weight
 
             pos_coords = (ori_anchors, ori_labels, ori_bbox_targets, 'atss')
-            return dict(loss_rank=ranking_loss, loss_sort=sorting_loss,loss_bbox=losses_bbox,pos_coords=pos_coords)
+            weight = self.rank_loss_type['loss_weight']
+            return dict(loss_rank=ranking_loss*weight, loss_sort=sorting_loss*weight,loss_bbox=losses_bbox*weight,pos_coords=pos_coords)
         
         else:
             losses_bbox = torch.cat(bbox_preds).sum() * 0
             ranking_loss = torch.cat(cls_scores).sum() * 0
             sorting_loss = torch.cat(cls_scores).sum() * 0
             pos_coords = (ori_anchors, ori_labels, ori_bbox_targets, 'atss')
-            return dict(loss_rank=ranking_loss, loss_sort=sorting_loss, loss_bbox=losses_bbox)
+            weight = self.rank_loss_type['loss_weight']
+            return dict(loss_rank=ranking_loss*weight, loss_sort=sorting_loss*weight, loss_bbox=losses_bbox*weight, pos_coords=pos_coords)
 
 
     def centerness_target(self, anchors, gts):

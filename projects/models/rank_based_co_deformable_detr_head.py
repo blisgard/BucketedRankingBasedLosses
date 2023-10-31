@@ -391,10 +391,11 @@ class RankBasedCoDeformDETRHead(DETRHead):
             bbox_avg_factor = torch.sum(bbox_weights)
             if bbox_avg_factor < EPS:
                 bbox_avg_factor = 1
-                
+            
             losses_iou = torch.sum(bbox_weights*loss_iou)/bbox_avg_factor
 
             self.SB_weight = (ranking_loss+sorting_loss).detach()/float(losses_iou.item())
+
             losses_iou *= self.SB_weight
 
 
@@ -922,23 +923,15 @@ class RankBasedCoDeformDETRHead(DETRHead):
                 bbox_avg_factor = 1
                 
             losses_bbox = torch.sum(bbox_weights*loss_bbox)/bbox_avg_factor
-            print("losses_bbox:", losses_bbox)                
             self.SB_weight = (ranking_loss+sorting_loss).detach()/float(losses_bbox.item())
-            print("self.SB_weight:", self.SB_weight)
             losses_bbox *= self.SB_weight
-            print("losses_bbox:", losses_bbox)
-            print("rank+sort loss:", ranking_loss+sorting_loss)
             # regression IoU loss, defaultly GIoU loss
             loss_iou = self.loss_iou(
                 bboxes, bboxes_gt, bbox_weights, avg_factor=num_total_pos)
             losses_iou = torch.sum(bbox_weights*loss_iou)/bbox_avg_factor
-            print("losses_iou:", losses_iou)                
 
             self.SB_weight = (ranking_loss+sorting_loss).detach()/float(losses_iou.item())
-            print("self.SB_weight:", self.SB_weight)
             losses_iou *= self.SB_weight
-            print("losses_iou:", losses_iou)
-            print("rank+sort loss:", ranking_loss+sorting_loss)
 
 
             return ranking_loss, sorting_loss, losses_bbox, losses_iou

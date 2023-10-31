@@ -41,7 +41,7 @@ model = dict(
             target_means=[.0, .0, .0, .0],
             target_stds=[1.0, 1.0, 1.0, 1.0]),
             rank_loss_type = dict(
-                type='RankSort', loss_weight=1.0*num_dec_layer*lambda_2),
+                type='BucketedRankSort', loss_weight=5.0),
         loss_cls=dict(
             type='CrossEntropyLoss', use_sigmoid=True, loss_weight=1.0*num_dec_layer*lambda_2),
         loss_bbox=dict(type='GIoULoss', loss_weight=1.0*num_dec_layer*lambda_2)),
@@ -101,7 +101,7 @@ model = dict(
             alpha=0.25,
             loss_weight=2.0),
         rank_loss_type = dict(
-                type='RankSort', loss_weight=2.0),
+                type='BucketedRankSort', loss_weight=2.0),
         loss_bbox=dict(type='L1Loss', loss_weight=5.0),
         loss_iou=dict(type='GIoULoss', loss_weight=2.0)),
     roi_head=[dict(
@@ -119,7 +119,7 @@ model = dict(
             roi_feat_size=7,
             num_classes=80,
             rank_loss_type = dict(
-                type='RankSort', loss_weight=1.0*num_dec_layer*lambda_2),
+                type='BucketedRankSort', loss_weight=5.0),
             bbox_coder=dict(
                 type='DeltaXYWHBBoxCoder',
                 target_means=[0., 0., 0., 0.],
@@ -146,9 +146,9 @@ model = dict(
             target_means=[.0, .0, .0, .0],
             target_stds=[0.1, 0.1, 0.2, 0.2]),
         rank_loss_type=dict(
-            type='RankSort',
-            loss_weight=1.0*num_dec_layer*lambda_2),
-        loss_bbox=dict(type='GIoULoss', loss_weight=2.0*num_dec_layer*lambda_2),
+            type='BucketedRankSort',
+            loss_weight=5.0),
+        loss_bbox=dict(type='GIoULoss', loss_weight=5.0),
         ),
             ],
     # model training and testing settings
@@ -298,8 +298,8 @@ data = dict(
 # optimizer
 optimizer = dict(
     type='AdamW',
-    lr=1e-4,
-    weight_decay=0.5e-4,
+    lr=2e-4,
+    weight_decay=1e-4,
     paramwise_cfg=dict(
         custom_keys={
             'backbone': dict(lr_mult=0.1),

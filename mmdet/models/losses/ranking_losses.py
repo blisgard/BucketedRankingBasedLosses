@@ -6,7 +6,7 @@ from ..builder import LOSSES
 @LOSSES.register_module()
 class BucketedRankSort(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, logits, targets, delta_RS=0.50, eps=1e-10): 
+    def forward(ctx, logits, targets, loss_weight=1,delta_RS=0.50, eps=1e-10): 
         
         grad = torch.zeros(targets.shape).cuda()
         metric = torch.zeros(0).cuda()
@@ -45,120 +45,163 @@ class BucketedRankSort(torch.autograd.Function):
         if len(relevant_targets) == 0:
             ctx.save_for_backward(grad)
             return torch.zeros(0).cuda(), torch.zeros(1).cuda()
-        print("relevant b indices:", len(relevant_b_indices))
-        print("relevant logits:", len(relevant_logits))
-        print("relevant f indices:", len(relevant_f_indices))
-        print("max fg:", relevant_logits[relevant_f_indices[0]].item())
-        print("min fg:", relevant_logits[relevant_f_indices[-1]].item())
-        print("max bg:", relevant_logits[relevant_b_indices[0]].item())
-        print("min bg:", relevant_logits[relevant_b_indices[-1]].item())
-        bucket_sizes_b = (torch.sub(relevant_f_indices[1:], relevant_f_indices[:len(relevant_f_indices) - 1]) - 1)
-        bucket_sizes_b = torch.cat((torch.tensor([[relevant_f_indices[0]]], device='cuda'), bucket_sizes_b))
-        bucket_sizes_b = torch.cat((bucket_sizes_b, torch.tensor([[relevant_b_indices[-1] -  relevant_f_indices[-1]]], device='cuda')))
-        bucket_sizes_b = bucket_sizes_b[(bucket_sizes_b != 0)]
-        bucket_sizes_b = bucket_sizes_b.reshape((len(bucket_sizes_b), 1))
-        l_bucket_sizes_b = [int(x) for x in torch.Tensor.tolist(bucket_sizes_b.flatten())]
-
-        relevant_bg_buckets = torch.split(relevant_logits[relevant_b_indices], tuple(l_bucket_sizes_b))
-        bg_bucket_mean = torch.Tensor([torch.mean(bucket) for bucket in list(relevant_bg_buckets)]).cuda()
-
-        bucket_sizes_f = torch.ones(len(f_logits)).cuda()
-        all_buckets = torch.cat((f_logits, bg_bucket_mean))
-
-        all_buckets, indices_s = torch.sort(all_buckets, descending=True)
-
-        new_targets = torch.zeros(len(all_buckets)).cuda()
-        new_targets[indices_s < len(f_logits)] = sorted_p_and_n_targets[sorted_p_and_n_targets != 0]
-
-        # print("Calculation Started")
-        if torch.max(new_targets) <= 0:
-            return grad, metric
-
-        labels_p = (new_targets > 0.)
-        allabels_p = torch.nonzero((sorted_p_and_n_targets > 0.)).flatten()
-        labels_n = torch.nonzero((sorted_p_and_n_targets[:irrelevant_b_index] == 0)).flatten()
-
-        fg_logits = all_buckets[labels_p]
-
-        threshold_logit = torch.min(fg_logits) - delta_RS
-
-        # Ignore those negative j that satisfy (L_{ij}=0 for all positive i), to accelerate the AP-loss computation.
-        valid_labels_n = ((new_targets == 0) & (all_buckets >= threshold_logit))
-
-        valid_bg_logits = all_buckets[valid_labels_n]
-
-        bg_relations = (valid_bg_logits[:, None] - fg_logits[None, :]).cuda()
-
-        fg_relations = (fg_logits[:, None] - fg_logits[None, :]).cuda()
-        if delta_RS > 0:
-            fg_relations = torch.clamp(fg_relations / (2 * delta_RS) + 0.5, min=0, max=1)
-            bg_relations = torch.clamp(bg_relations / (2 * delta_RS) + 0.5, min=0, max=1)
-        else:
-            fg_relations = (fg_relations >= 0).float()
-            bg_relations = (bg_relations >= 0).float()
-
-        fg_num = len(torch.nonzero((targets > 0.)).flatten())
-
-        # multiplication_bg = torch.mul(bg_relations, bucket_sizes_b.cuda())
-        multiplication_bg = torch.mul(bg_relations, bucket_sizes_b)
-        multiplication_fg = torch.mul(fg_relations, bucket_sizes_f)
-
-        FP_num = torch.sum(multiplication_bg, axis=0)
-        rank_pos = torch.sum(multiplication_fg, axis=0)
-
-        #if delta_RS > 0:
-        #    rank_pos += 0.5
-
-        rank = rank_pos + FP_num
-        ranking_error = (FP_num / rank.float())
-        current_sorting_error = torch.sum(fg_relations.T * (1 - f_targets), axis=1) / rank_pos
-   
-        iou_relations = f_targets >= f_targets[:, None]
-
-        target_sorted_order = fg_relations.T * iou_relations
-
         
-        rank_pos_target = torch.sum(target_sorted_order, axis=1)
+        if len(relevant_f_indices) == 0:
+            print("fg sayisi sifir")
+            ctx.save_for_backward(grad)
+            return torch.zeros(0).cuda(), torch.zeros(1).cuda()
+        
+        fg_num = len(torch.nonzero((targets > 0.)).flatten())
+        if len(relevant_b_indices) != 0:
+            bucket_sizes_b = (torch.sub(relevant_f_indices[1:], relevant_f_indices[:len(relevant_f_indices) - 1]) - 1)
+            bucket_sizes_b = torch.cat((torch.tensor([[relevant_f_indices[0]]], device='cuda'), bucket_sizes_b))
+            if relevant_f_indices[-1] < relevant_b_indices[-1]:
+                bucket_sizes_b = torch.cat((bucket_sizes_b, torch.tensor([[relevant_b_indices[-1] -  relevant_f_indices[-1]]], device='cuda')))
+            bucket_sizes_b = bucket_sizes_b[(bucket_sizes_b != 0)]
+            bucket_sizes_b = bucket_sizes_b.reshape((len(bucket_sizes_b), 1))
+            l_bucket_sizes_b = [int(x) for x in torch.Tensor.tolist(bucket_sizes_b.flatten())]
+
+            relevant_bg_buckets = torch.split(relevant_logits[relevant_b_indices], tuple(l_bucket_sizes_b))
+            bg_bucket_mean = torch.Tensor([torch.mean(bucket) for bucket in list(relevant_bg_buckets)]).cuda()
+
+            bucket_sizes_f = torch.ones(len(f_logits)).cuda()
+            all_buckets = torch.cat((f_logits, bg_bucket_mean))
+
+            all_buckets, indices_s = torch.sort(all_buckets, descending=True)
+
+            new_targets = torch.zeros(len(all_buckets)).cuda()
+            new_targets[indices_s < len(f_logits)] = sorted_p_and_n_targets[sorted_p_and_n_targets != 0]
+
+            # print("Calculation Started")
+            if torch.max(new_targets) <= 0:
+                return grad, metric
+
+            labels_p = (new_targets > 0.)
+            allabels_p = torch.nonzero((sorted_p_and_n_targets > 0.)).flatten()
+            labels_n = torch.nonzero((sorted_p_and_n_targets[:irrelevant_b_index] == 0)).flatten()
+
+            fg_logits = all_buckets[labels_p]
+
+            threshold_logit = torch.min(fg_logits) - delta_RS
+
+            # Ignore those negative j that satisfy (L_{ij}=0 for all positive i), to accelerate the AP-loss computation.
+            valid_labels_n = ((new_targets == 0) & (all_buckets >= threshold_logit))
+
+            valid_bg_logits = all_buckets[valid_labels_n]
+
+            bg_relations = (valid_bg_logits[:, None] - fg_logits[None, :]).cuda()
+
+            fg_relations = (fg_logits[:, None] - fg_logits[None, :]).cuda()
+            if delta_RS > 0:
+                fg_relations = torch.clamp(fg_relations / (2 * delta_RS) + 0.5, min=0, max=1)
+                bg_relations = torch.clamp(bg_relations / (2 * delta_RS) + 0.5, min=0, max=1)
+            else:
+                fg_relations = (fg_relations >= 0).float()
+                bg_relations = (bg_relations >= 0).float()
 
 
-        target_sorting_error = torch.sum(target_sorted_order * (1 - f_targets), axis=1) / rank_pos_target
-        sorting_error = current_sorting_error - target_sorting_error
+            # multiplication_bg = torch.mul(bg_relations, bucket_sizes_b.cuda())
+            multiplication_bg = torch.mul(bg_relations, bucket_sizes_b)
+            multiplication_fg = torch.mul(fg_relations, bucket_sizes_f)
 
-        missorted_examples = fg_relations.t() * (~iou_relations)
+            FP_num = torch.sum(multiplication_bg, axis=0)
+            rank_pos = torch.sum(multiplication_fg, axis=0)
 
-        sorting_pmf_denom = torch.sum(missorted_examples, axis=1)
-        FP_num[(FP_num == 0).nonzero()] = 1
+            #if delta_RS > 0:
+            #    rank_pos += 0.5
 
-        bucket_grads = (torch.sum(
-            torch.mul(multiplication_bg, ranking_error * bucket_sizes_f.flatten()) / FP_num,
-            axis=1) / bucket_sizes_b.flatten())
+            rank = rank_pos + FP_num
+            ranking_error = (FP_num / rank.float())
+            current_sorting_error = torch.sum(fg_relations.T * (1 - f_targets), axis=1) / rank_pos
+    
+            iou_relations = f_targets >= f_targets[:, None]
 
-        duplication_bg = bucket_grads.repeat_interleave(bucket_sizes_b.flatten().type(torch.LongTensor).cuda())
+            target_sorted_order = fg_relations.T * iou_relations
 
-        duplication_fg = ranking_error.repeat_interleave(
-            bucket_sizes_f.flatten().type(torch.LongTensor).cuda())
-
-        grad[p_and_n_indices[sorted_p_and_n_indices[:irrelevant_b_index][labels_n]]] = duplication_bg.cuda()
-        grad[p_and_n_indices[sorted_p_and_n_indices[allabels_p]]] = -duplication_fg
-
-        # For ii the update is the sorting error
-        grad[p_and_n_indices[sorted_p_and_n_indices[allabels_p]]] -= sorting_error * (sorting_pmf_denom != 0.)
-        x = sorting_error / sorting_pmf_denom
-        x[torch.isnan(x)] = 0
-        x[torch.isinf(x)] = 0
-        # For positives, distribute error via sorting pmf (i.e. missorted_examples/sorting_pmf_denom)
-        grad[p_and_n_indices[sorted_p_and_n_indices[allabels_p]]] += torch.sum(missorted_examples.t() * x, axis=1)
-
-        grad /= fg_num
-
-        metric = torch.sum(1 - ranking_error, dim=0) / fg_num
-
-        sum_pos = torch.abs(torch.sum(grad[p_indices])).item()
-        sum_neg = torch.abs(torch.sum(grad[n_indices])).item()
+            
+            rank_pos_target = torch.sum(target_sorted_order, axis=1)
 
 
-        ctx.save_for_backward(grad)
-        return ranking_error.mean(), sorting_error.mean()
+            target_sorting_error = torch.sum(target_sorted_order * (1 - f_targets), axis=1) / rank_pos_target
+            sorting_error = current_sorting_error - target_sorting_error
+
+            missorted_examples = fg_relations.t() * (~iou_relations)
+
+            sorting_pmf_denom = torch.sum(missorted_examples, axis=1)
+            FP_num[(FP_num == 0).nonzero()] = 1
+
+            bucket_grads = (torch.sum(
+                torch.mul(multiplication_bg, ranking_error * bucket_sizes_f.flatten()) / FP_num,
+                axis=1) / bucket_sizes_b.flatten())
+
+            duplication_bg = bucket_grads.repeat_interleave(bucket_sizes_b.flatten().type(torch.LongTensor).cuda())
+
+            duplication_fg = ranking_error.repeat_interleave(
+                bucket_sizes_f.flatten().type(torch.LongTensor).cuda())
+
+            grad[p_and_n_indices[sorted_p_and_n_indices[:irrelevant_b_index][labels_n]]] = duplication_bg.cuda()
+            grad[p_and_n_indices[sorted_p_and_n_indices[allabels_p]]] = -duplication_fg
+
+            # For ii the update is the sorting error
+            grad[p_and_n_indices[sorted_p_and_n_indices[allabels_p]]] -= sorting_error * (sorting_pmf_denom != 0.)
+            x = sorting_error / sorting_pmf_denom
+            x[torch.isnan(x)] = 0
+            x[torch.isinf(x)] = 0
+            # For positives, distribute error via sorting pmf (i.e. missorted_examples/sorting_pmf_denom)
+            grad[p_and_n_indices[sorted_p_and_n_indices[allabels_p]]] += torch.sum(missorted_examples.t() * x, axis=1)
+
+            grad /= fg_num
+
+            metric = torch.sum(1 - ranking_error, dim=0) / fg_num
+
+            ctx.save_for_backward(grad)
+            return ranking_error.mean(), sorting_error.mean()
+        else:
+            ranking_error = torch.zeros(1).cuda()
+            
+            fg_relations = (f_logits[:, None] - f_logits[None, :]).cuda()
+            if delta_RS > 0:
+                fg_relations = torch.clamp(fg_relations / (2 * delta_RS) + 0.5, min=0, max=1)
+            else:
+                fg_relations = (fg_relations >= 0).float()
+
+            bucket_sizes_f = torch.ones(len(f_logits)).cuda()
+            multiplication_fg = torch.mul(fg_relations, bucket_sizes_f)
+            rank_pos = torch.sum(multiplication_fg, axis=0)
+            
+            current_sorting_error = torch.sum(fg_relations.T * (1 - f_targets), axis=1) / rank_pos
+    
+            iou_relations = f_targets >= f_targets[:, None]
+
+            target_sorted_order = fg_relations.T * iou_relations
+
+            
+            rank_pos_target = torch.sum(target_sorted_order, axis=1)
+
+            target_sorting_error = torch.sum(target_sorted_order * (1 - f_targets), axis=1) / rank_pos_target
+            sorting_error = current_sorting_error - target_sorting_error
+
+            missorted_examples = fg_relations.t() * (~iou_relations)
+
+            sorting_pmf_denom = torch.sum(missorted_examples, axis=1)
+            allabels_p = torch.nonzero((sorted_p_and_n_targets > 0.)).flatten()
+            grad[p_and_n_indices[sorted_p_and_n_indices[allabels_p]]] -= sorting_error * (sorting_pmf_denom != 0.)
+            x = sorting_error / sorting_pmf_denom
+            x[torch.isnan(x)] = 0
+            x[torch.isinf(x)] = 0
+            # For positives, distribute error via sorting pmf (i.e. missorted_examples/sorting_pmf_denom)
+            grad[p_and_n_indices[sorted_p_and_n_indices[allabels_p]]] += torch.sum(missorted_examples.t() * x, axis=1)
+
+            grad /= fg_num
+
+            metric = torch.sum(1 - ranking_error, dim=0) / fg_num
+
+            ctx.save_for_backward(grad)
+            print("ranking error for non_bg example:", ranking_error.mean())
+            print("sorting error for non bg example:", sorting_error.mean())
+            return ranking_error.mean(), sorting_error.mean()
+            
+            
 
     @staticmethod
     def backward(ctx, out_grad1, out_grad2):
@@ -168,7 +211,7 @@ class BucketedRankSort(torch.autograd.Function):
 @LOSSES.register_module()
 class RankSort(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, logits, targets, delta_RS=0.50, eps=1e-10): 
+    def forward(ctx, logits, targets, loss_weight=1,delta_RS=0.50, eps=1e-10): 
 
         classification_grads=torch.zeros(logits.shape).cuda()
         #Filter fg logits

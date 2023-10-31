@@ -41,7 +41,7 @@ model = dict(
             target_means=[.0, .0, .0, .0],
             target_stds=[1.0, 1.0, 1.0, 1.0]),
             rank_loss_type = dict(
-                type='RankSort', loss_weight=1.0*num_dec_layer*lambda_2),
+                type='RankSort', loss_weight=5.0),
         loss_cls=dict(
             type='CrossEntropyLoss', use_sigmoid=True, loss_weight=1.0*num_dec_layer*lambda_2),
         loss_bbox=dict(type='GIoULoss', loss_weight=1.0*num_dec_layer*lambda_2)),
@@ -119,7 +119,7 @@ model = dict(
             roi_feat_size=7,
             num_classes=80,
             rank_loss_type = dict(
-                type='RankSort', loss_weight=1.0*num_dec_layer*lambda_2),
+                type='RankSort', loss_weight=5.0),
             bbox_coder=dict(
                 type='DeltaXYWHBBoxCoder',
                 target_means=[0., 0., 0., 0.],
@@ -147,8 +147,8 @@ model = dict(
             target_stds=[0.1, 0.1, 0.2, 0.2]),
         rank_loss_type=dict(
             type='RankSort',
-            loss_weight=1.0*num_dec_layer*lambda_2),
-        loss_bbox=dict(type='GIoULoss', loss_weight=2.0*num_dec_layer*lambda_2),
+            loss_weight=5.0),
+        loss_bbox=dict(type='GIoULoss', loss_weight=5.0),
         ),
             ],
     # model training and testing settings
