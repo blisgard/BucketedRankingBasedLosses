@@ -29,8 +29,8 @@ test_pipeline = [
         ])
 ]
 data = dict(
-    samples_per_gpu=2,
-    workers_per_gpu=2,
+    samples_per_gpu=1,
+    workers_per_gpu=1,
     train=dict(
         type=dataset_type,
         ann_file= '/truba/home/feyavuz/ranksortloss/aLRPv2-aLRPLossv2/data/coco/annotations/instances_train2017.json',
@@ -43,7 +43,8 @@ data = dict(
         pipeline=test_pipeline),
     test=dict(
         type=dataset_type,
-        ann_file= '/truba/home/feyavuz/ranksortloss/aLRPv2-aLRPLossv2/data/coco/annotations/instances_val2017.json',
-        img_prefix=data_root + 'val2017/',
+        ann_file= '/truba/home/feyavuz/ranksortloss/aLRPv2-aLRPLossv2/data/coco/annotations/image_info_test-dev2017.json',
+        img_prefix=data_root + 'test2017/',
+        test_mode=True,
         pipeline=test_pipeline))
 evaluation = dict(interval=1, metric='bbox')

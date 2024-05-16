@@ -61,6 +61,7 @@ class AnchorHead(BaseDenseHead, BBoxTestMixin):
                  test_cfg=None,
                  init_cfg=dict(type='Normal', layer='Conv2d', std=0.01)):
         super(AnchorHead, self).__init__(init_cfg)
+
         self.in_channels = in_channels
         self.num_classes = num_classes
         self.feat_channels = feat_channels

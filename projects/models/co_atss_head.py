@@ -363,12 +363,8 @@ class CoATSSHead(AnchorHead):
         bbox_weights = (all_cls_scores.detach().sigmoid().max(dim=1)[0][pos_inds])
         pos_decode_bbox_pred = self.bbox_coder.decode(
                 pos_anchors, pos_bbox_pred)
-        print("pos_bbox_pred:", pos_bbox_pred[0])
-        print("pos_bbox_targets:", pos_bbox_targets[0])
         pos_decode_bbox_targets = self.bbox_coder.decode(
                 pos_anchors, pos_bbox_targets)
-        print("pos_decode_bbox_pred:", pos_decode_bbox_pred[0])
-        print("pos_decode_bbox_target:", pos_decode_bbox_targets[0])
         flat_labels = vectorize_labels(cls_labels, self.num_classes, torch.cat(all_label_weights))
         flat_preds = all_cls_scores.reshape(-1)
         IoU_targets = bbox_overlaps(pos_decode_bbox_pred.detach(), pos_bbox_targets, is_aligned=True)

@@ -12,8 +12,8 @@ from mmdet.core import (bbox_cxcywh_to_xyxy, bbox_xyxy_to_cxcywh,
 from mmdet.models.utils import build_transformer
 from ..builder import HEADS, build_loss
 from .anchor_free_head import AnchorFreeHead
-
-
+import os
+#from mmdet.core.bbox.assigners import HungarianIdentity
 @HEADS.register_module()
 class DETRHead(AnchorFreeHead):
     """Implements the DETR transformer head.
@@ -358,6 +358,9 @@ class DETRHead(AnchorFreeHead):
                                            img_metas, gt_bboxes_ignore_list)
         (labels_list, label_weights_list, bbox_targets_list, bbox_weights_list,
          num_total_pos, num_total_neg) = cls_reg_targets
+        #(labels_list, label_weights_list, bbox_targets_list, bbox_weights_list,
+        # num_total_pos, num_total_neg) = cls_reg_targets
+
         labels = torch.cat(labels_list, 0)
         label_weights = torch.cat(label_weights_list, 0)
         bbox_targets = torch.cat(bbox_targets_list, 0)
@@ -372,7 +375,7 @@ class DETRHead(AnchorFreeHead):
             cls_avg_factor = reduce_mean(
                 cls_scores.new_tensor([cls_avg_factor]))
         cls_avg_factor = max(cls_avg_factor, 1)
-        
+
         loss_cls = self.loss_cls(
             cls_scores, labels, label_weights, avg_factor=cls_avg_factor)
 
@@ -435,7 +438,7 @@ class DETRHead(AnchorFreeHead):
 
         Returns:
             tuple: a tuple containing the following targets.
-
+res_list[0]
                 - labels_list (list[Tensor]): Labels for all images.
                 - label_weights_list (list[Tensor]): Label weights for all \
                     images.
@@ -459,6 +462,10 @@ class DETRHead(AnchorFreeHead):
          bbox_weights_list, pos_inds_list, neg_inds_list) = multi_apply(
              self._get_target_single, cls_scores_list, bbox_preds_list,
              gt_bboxes_list, gt_labels_list, img_metas, gt_bboxes_ignore_list)
+        #(labels_list, label_weights_list, bbox_targets_list,
+         #bbox_weights_list, pos_inds_list, neg_inds_list) = multi_apply(
+         #    self._get_target_single, cls_scores_list, bbox_preds_list,
+         #    gt_bboxes_list, gt_labels_list, img_metas, gt_bboxes_ignore_list)
         num_total_pos = sum((inds.numel() for inds in pos_inds_list))
         num_total_neg = sum((inds.numel() for inds in neg_inds_list))
         return (labels_list, label_weights_list, bbox_targets_list,
@@ -505,8 +512,11 @@ class DETRHead(AnchorFreeHead):
         assign_result = self.assigner.assign(bbox_pred, cls_score, gt_bboxes,
                                              gt_labels, img_meta,
                                              gt_bboxes_ignore)
+        #identity  = HungarianIdentity()
+        #res_cls, res_bbox, res_iou = identity.assign(bbox_pred, cls_score, gt_bboxes, gt_labels, img_meta, gt_bboxes_ignore)
         sampling_result = self.sampler.sample(assign_result, bbox_pred,
                                               gt_bboxes)
+        
         pos_inds = sampling_result.pos_inds
         neg_inds = sampling_result.neg_inds
 
@@ -533,6 +543,8 @@ class DETRHead(AnchorFreeHead):
         bbox_targets[pos_inds] = pos_gt_bboxes_targets
         return (labels, label_weights, bbox_targets, bbox_weights, pos_inds,
                 neg_inds)
+        #return (labels, label_weights, bbox_targets, bbox_weights, pos_inds,
+        #        neg_inds)
 
     # over-write because img_metas are needed as inputs for bbox_head.
     def forward_train(self,

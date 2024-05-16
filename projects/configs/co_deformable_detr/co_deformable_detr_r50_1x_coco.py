@@ -27,7 +27,7 @@ model = dict(
         norm_cfg=dict(type='GN', num_groups=32),
         num_outs=4),
     rpn_head=dict(
-        type='RankBasedRPNHead',
+        type='RPNHead',
         in_channels=256,
         feat_channels=256,
         anchor_generator=dict(
@@ -42,7 +42,7 @@ model = dict(
             target_stds=[1.0, 1.0, 1.0, 1.0]),
         loss_cls=dict(
             type='CrossEntropyLoss', use_sigmoid=True, loss_weight=1.0*num_dec_layer*lambda_2),
-        loss_bbox=dict(type='GIoULoss', loss_weight=1.0*num_dec_layer*lambda_2)),
+        loss_bbox=dict(type='L1Loss', loss_weight=1.0*num_dec_layer*lambda_2)),
     query_head=dict(
         type='CoDeformDETRHead',
         num_query=300,
@@ -124,7 +124,7 @@ model = dict(
                 type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0*num_dec_layer*lambda_2),
             loss_bbox=dict(type='GIoULoss', loss_weight=10.0*num_dec_layer*lambda_2)))],
     bbox_head=[dict(
-        type='RankBasedCoATSSHead',
+        type='CoATSSHead',
         num_classes=80,
         in_channels=256,
         stacked_convs=1,
@@ -139,12 +139,15 @@ model = dict(
             type='DeltaXYWHBBoxCoder',
             target_means=[.0, .0, .0, .0],
             target_stds=[0.1, 0.1, 0.2, 0.2]),
-        rank_loss_type=dict(
-            type='RankSort',
+        loss_cls=dict(
+            type='FocalLoss',
+            use_sigmoid=True,
+            gamma=2.0,
+            alpha=0.25,
             loss_weight=1.0*num_dec_layer*lambda_2),
         loss_bbox=dict(type='GIoULoss', loss_weight=2.0*num_dec_layer*lambda_2),
-        ),
-            ],
+        loss_centerness=dict(
+            type='CrossEntropyLoss', use_sigmoid=True, loss_weight=1.0*num_dec_layer*lambda_2)),],
     # model training and testing settings
     train_cfg=[
         dict(
@@ -163,14 +166,16 @@ model = dict(
                     match_low_quality=True,
                     ignore_iof_thr=-1),
                 sampler=dict(
-                    type='PseudoSampler'),
+                    type='RandomSampler',
+                    num=256,
+                    pos_fraction=0.5,
+                    neg_pos_ub=-1,
+                    add_gt_as_proposals=False),
                 allowed_border=-1,
                 pos_weight=-1,
                 debug=False),
             rpn_proposal=dict(
                 nms_pre=4000,
-                nms_post=4000,
-                nms_thr=0.7,
                 max_per_img=1000,
                 nms=dict(type='nms', iou_threshold=0.7),
                 min_bbox_size=0),
@@ -183,7 +188,11 @@ model = dict(
                     match_low_quality=False,
                     ignore_iof_thr=-1),
                 sampler=dict(
-                    type='PseudoSampler', num=1e10),
+                    type='RandomSampler',
+                    num=512,
+                    pos_fraction=0.25,
+                    neg_pos_ub=-1,
+                    add_gt_as_proposals=True),
                 pos_weight=-1,
                 debug=False)),
         dict(
@@ -191,7 +200,6 @@ model = dict(
             allowed_border=-1,
             pos_weight=-1,
             debug=False),],
-
     test_cfg=[
         dict(max_per_img=100),
         dict(
@@ -304,5 +312,3 @@ optimizer_config = dict(grad_clip=dict(max_norm=0.1, norm_type=2))
 # learning policy
 lr_config = dict(policy='step', step=[11])
 runner = dict(type='EpochBasedRunner', max_epochs=12)
-
-

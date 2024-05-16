@@ -374,12 +374,13 @@ class CocoDataset(CustomDataset):
         assert len(results) == len(self), (
             'The length of results is not equal to the dataset len: {} != {}'.
             format(len(results), len(self)))
-
         if jsonfile_prefix is None:
             tmp_dir = tempfile.TemporaryDirectory()
-            jsonfile_prefix = osp.join(tmp_dir.name, 'results')
+            jsonfile_prefix = osp.join(tmp_dir.name, 'co_deformable_detr_r50_1x_coco')
         else:
             tmp_dir = None
+        jsonfile_prefix = '/truba/home/feyavuz/ranksortloss/Co-DETR/work_dirs/deneme/co_deformable_detr_swin_large_900q_3x_coco'
+        print("results:", jsonfile_prefix)
         result_files = self.results2json(results, jsonfile_prefix)
         return result_files, tmp_dir
 
@@ -637,7 +638,8 @@ class CocoDataset(CustomDataset):
 
         coco_gt = self.coco
         self.cat_ids = coco_gt.get_cat_ids(cat_names=self.CLASSES)
-
+        print(self.cat_ids)
+        print("burdayim")
         result_files, tmp_dir = self.format_results(results, jsonfile_prefix)
         eval_results = self.evaluate_det_segm(results, result_files, coco_gt,
                                               metrics, logger, classwise,

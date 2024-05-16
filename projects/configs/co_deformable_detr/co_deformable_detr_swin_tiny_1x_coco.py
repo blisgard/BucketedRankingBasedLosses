@@ -1,5 +1,5 @@
 _base_ = [
-    'co_deformable_detr_r50_1x_coco.py'
+    'swin_tiny_base.py'
 ]
 pretrained = 'models/swin_tiny_patch4_window7_224.pth'
 # model settings

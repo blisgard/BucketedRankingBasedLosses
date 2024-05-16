@@ -12,14 +12,13 @@ try:
 except ImportError:
     linear_sum_assignment = None
 
-
 @BBOX_ASSIGNERS.register_module()
 class HungarianAssigner(BaseAssigner):
     """Computes one-to-one matching between predictions and ground truth.
 
     This class computes an assignment between the targets and the predictions
     based on the costs. The costs are weighted sum of three components:
-    classification cost, regression L1 cost and regression iou cost. The
+    classification cost, regression L1 cost and rresegression iou cost. The
     targets don't include the no_object, so generally there are more
     predictions than targets. After the one-to-one matching, the un-matched
     are treated as backgrounds. Thus each query prediction will be assigned
@@ -135,12 +134,11 @@ class HungarianAssigner(BaseAssigner):
             bbox_pred.device)
         matched_col_inds = torch.from_numpy(matched_col_inds).to(
             bbox_pred.device)
-
-        # 4. assign backgrounds and foregrounds
-        # assign all indices to backgrounds first
+       
         assigned_gt_inds[:] = 0
         # assign foregrounds based on matching results
         assigned_gt_inds[matched_row_inds] = matched_col_inds + 1
         assigned_labels[matched_row_inds] = gt_labels[matched_col_inds]
+
         return AssignResult(
             num_gts, assigned_gt_inds, None, labels=assigned_labels)

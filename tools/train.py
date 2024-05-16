@@ -202,10 +202,12 @@ def main():
 
     cfg.device = get_device()
     # set random seeds
+
     seed = init_random_seed(args.seed, device=cfg.device)
     seed = seed + dist.get_rank() if args.diff_seed else seed
+    seed = 996155177
     logger.info(f'Set random seed to {seed}, '
-                f'deterministic: {args.deterministic}')
+            f'deterministic: {args.deterministic}')
     set_random_seed(seed, deterministic=args.deterministic)
     cfg.seed = seed
     meta['seed'] = seed

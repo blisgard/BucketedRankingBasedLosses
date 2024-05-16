@@ -145,7 +145,6 @@ class RankBasedRPNHead(RPNTestMixin, AnchorHead):
             flat_labels = vectorize_labels(cls_labels, self.num_classes, torch.cat(all_label_weights))
             flat_preds = all_scores.reshape(-1)
             if self.rank_loss_type['type'] == 'RankSort' or self.rank_loss_type['type'] == 'BucketedRankSort':
-                print("RPN")
                 pos_weights = all_scores.detach().sigmoid().max(dim=1)[0][pos_idx]
 
                 bbox_avg_factor = torch.sum(pos_weights)

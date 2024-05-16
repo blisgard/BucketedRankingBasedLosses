@@ -260,12 +260,13 @@ class RankBasedCoATSSHead(AnchorHead):
 
             pos_coords = (ori_anchors, ori_labels, ori_bbox_targets, 'atss')
             weight = self.rank_loss_type['loss_weight']
+
             return dict(loss_rank=ranking_loss*weight, loss_sort=sorting_loss*weight,loss_bbox=losses_bbox*weight,pos_coords=pos_coords)
         
         else:
-            losses_bbox = torch.cat(bbox_preds).sum() * 0
-            ranking_loss = torch.cat(cls_scores).sum() * 0
-            sorting_loss = torch.cat(cls_scores).sum() * 0
+            losses_bbox = torch.cat(all_bbox_preds).sum() * 0
+            ranking_loss = all_cls_scores.sum() * 0
+            sorting_loss = all_cls_scores.sum() * 0
             pos_coords = (ori_anchors, ori_labels, ori_bbox_targets, 'atss')
             weight = self.rank_loss_type['loss_weight']
             return dict(loss_rank=ranking_loss*weight, loss_sort=sorting_loss*weight, loss_bbox=losses_bbox*weight, pos_coords=pos_coords)
