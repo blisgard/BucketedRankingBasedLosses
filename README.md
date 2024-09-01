@@ -21,7 +21,7 @@ We test our models under ```python=3.7.11,pytorch=1.11.0,cuda=11.3```.
 ### Data
 The COCO dataset and LVIS dataset should be organized as:
 ```
-Co-DETR
+BucketedRankingBasedLosses
 └── data
     ├── coco
     │   ├── annotations
