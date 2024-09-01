@@ -146,7 +146,6 @@ class RankBasedRPNHead(RPNTestMixin, AnchorHead):
             flat_preds = all_scores.reshape(-1)
             if self.rank_loss_type['type'] == 'RankSort' or self.rank_loss_type['type'] == 'BucketedRankSort':
                 pos_weights = all_scores.detach().sigmoid().max(dim=1)[0][pos_idx]
-
                 bbox_avg_factor = torch.sum(pos_weights)
                 if bbox_avg_factor < 1e-10:
                     bbox_avg_factor = 1

@@ -31,7 +31,7 @@ class RankBasedCoATSSHead(AnchorHead):
                  norm_cfg=dict(type='GN', num_groups=32, requires_grad=True),
                  reg_decoded_bbox=True,
                 rank_loss_type = dict(
-                     type='',
+                     type='BucketedRankSort',
                      use_sigmoid=True,
                      loss_weight=1.0),
                  init_cfg=dict(
@@ -60,8 +60,7 @@ class RankBasedCoATSSHead(AnchorHead):
             # SSD sampling=False so use PseudoSampler
             sampler_cfg = dict(type='PseudoSampler')
             self.sampler = build_sampler(sampler_cfg, context=self)
-        if rank_loss_type['type'] != '':
-            self.loss_rank = build_loss(rank_loss_type)
+        self.loss_rank = build_loss(rank_loss_type)
         self.rank_loss_type = rank_loss_type
 
 
@@ -191,7 +190,7 @@ class RankBasedCoATSSHead(AnchorHead):
             label_channels=label_channels)
         if cls_reg_targets is None:
             return None
-
+        
         (anchor_list, labels_list, label_weights_list, bbox_targets_list,
          bbox_weights_list, num_total_pos, num_total_neg,
          ori_anchors, ori_labels, ori_bbox_targets) = cls_reg_targets
@@ -233,18 +232,11 @@ class RankBasedCoATSSHead(AnchorHead):
 
             pos_decode_bbox_pred = self.bbox_coder.decode(
                 pos_anchors, pos_bbox_pred)
-        
 
-            # regression loss
-            loss_bbox = self.loss_bbox(
-                pos_decode_bbox_pred,
-                pos_bbox_targets) 
-
-            # classification component
+            # Ranking Loss
             flat_labels = vectorize_labels(cls_labels, self.num_classes, torch.cat(all_label_weights))
             flat_preds = all_cls_scores.reshape(-1)
             IoU_targets = bbox_overlaps(pos_decode_bbox_pred.detach(), pos_bbox_targets, is_aligned=True)
-
             flat_labels[flat_labels==1]=IoU_targets
 
             ranking_loss, sorting_loss = self.loss_rank.apply(flat_preds, flat_labels, 0.5)
@@ -252,7 +244,10 @@ class RankBasedCoATSSHead(AnchorHead):
             bbox_avg_factor = torch.sum(bbox_weights)
             if bbox_avg_factor < EPS:
                 bbox_avg_factor = 1
-                
+
+            # regression loss
+            loss_bbox = self.loss_bbox(pos_decode_bbox_pred, pos_bbox_targets)     
+
             losses_bbox = torch.sum(bbox_weights*loss_bbox)/bbox_avg_factor
 
             self.SB_weight = (ranking_loss+sorting_loss).detach()/float(losses_bbox.item())
@@ -269,6 +264,7 @@ class RankBasedCoATSSHead(AnchorHead):
             sorting_loss = all_cls_scores.sum() * 0
             pos_coords = (ori_anchors, ori_labels, ori_bbox_targets, 'atss')
             weight = self.rank_loss_type['loss_weight']
+            
             return dict(loss_rank=ranking_loss*weight, loss_sort=sorting_loss*weight, loss_bbox=losses_bbox*weight, pos_coords=pos_coords)
 
 

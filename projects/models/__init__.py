@@ -5,9 +5,7 @@ from .co_dino_head import *
 from .rank_based_co_dino_head import *
 from .co_atss_head import *
 from .rank_based_co_atss_head import *
-from .debug_rank_based_co_deformable_detr_head import *
-from .debug_rank_based_co_deformable_detr_head_case_2 import *
-from .rank_based_co_deformable_detr_head_weighted_rs import *
+from .rank_based_co_roi_head import *
 from .co_roi_head import *
 from .transformer import *
 from .query_denoising import build_dn_generator

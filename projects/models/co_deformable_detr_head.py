@@ -339,7 +339,7 @@ class CoDeformDETRHead(DETRHead):
             cls_avg_factor = reduce_mean(
                 cls_scores.new_tensor([cls_avg_factor]))
         cls_avg_factor = max(cls_avg_factor, 1)
-        
+
         loss_cls = self.loss_cls(
             cls_scores, labels, label_weights, avg_factor=cls_avg_factor)
 
@@ -372,6 +372,7 @@ class CoDeformDETRHead(DETRHead):
         # regression L1 loss
         loss_bbox = self.loss_bbox(
             bbox_preds, bbox_targets, bbox_weights, avg_factor=num_total_pos)
+        
         return loss_cls*self.lambda_1, loss_bbox*self.lambda_1, loss_iou*self.lambda_1
 
     def get_aux_targets(self, pos_coords, img_metas, mlvl_feats, head_idx):
@@ -828,11 +829,9 @@ class CoDeformDETRHead(DETRHead):
             cls_avg_factor = reduce_mean(
                 cls_scores.new_tensor([cls_avg_factor]))
         cls_avg_factor = max(cls_avg_factor, 1)
-
-        flat_labels = vectorize_labels(labels, self.num_classes, label_weights)
-        flat_preds = cls_scores.reshape(-1)
+        
         loss_cls = self.loss_cls(
-            cls_scores, labels, label_weights, avg_factor=cls_avg_factor)
+                cls_scores, labels, label_weights, avg_factor=cls_avg_factor)
 
         # Compute the average number of gt boxes across all gpus, for
         # normalization purposes
@@ -863,6 +862,7 @@ class CoDeformDETRHead(DETRHead):
         # regression L1 loss
         loss_bbox = self.loss_bbox(
             bbox_preds, bbox_targets, bbox_weights, avg_factor=num_total_pos)
+
         return loss_cls, loss_bbox, loss_iou
 
     def get_targets(self,

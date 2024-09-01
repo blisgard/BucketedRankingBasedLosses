@@ -6,7 +6,6 @@ from ..match_costs import build_match_cost
 from ..transforms import bbox_cxcywh_to_xyxy
 from .assign_result import AssignResult
 from .base_assigner import BaseAssigner
-
 try:
     from scipy.optimize import linear_sum_assignment
 except ImportError:
@@ -121,9 +120,9 @@ class HungarianAssigner(BaseAssigner):
         # regression iou cost, defaultly giou is used in official DETR.
         bboxes = bbox_cxcywh_to_xyxy(bbox_pred) * factor
         iou_cost = self.iou_cost(bboxes, gt_bboxes)
+            
         # weighted sum of above three costs
         cost = cls_cost + reg_cost + iou_cost
-
         # 3. do Hungarian matching on CPU using linear_sum_assignment
         cost = cost.detach().cpu()
         if linear_sum_assignment is None:
@@ -139,6 +138,7 @@ class HungarianAssigner(BaseAssigner):
         # assign foregrounds based on matching results
         assigned_gt_inds[matched_row_inds] = matched_col_inds + 1
         assigned_labels[matched_row_inds] = gt_labels[matched_col_inds]
+
 
         return AssignResult(
             num_gts, assigned_gt_inds, None, labels=assigned_labels)

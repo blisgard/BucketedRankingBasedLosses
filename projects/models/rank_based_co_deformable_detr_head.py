@@ -28,7 +28,7 @@ class RankBasedCoDeformDETRHead(DETRHead):
                  max_pos_coords=300,
                  lambda_1=1,
                  rank_loss_type = dict(
-                     type='RankSort',
+                     type='BucketedRankSort',
                      loss_weight=2.0),
                  with_box_refine=False,
                  as_two_stage=False,
@@ -163,7 +163,6 @@ class RankBasedCoDeformDETRHead(DETRHead):
                     cls_branches=self.cls_branches if self.as_two_stage else None,  # noqa:E501
                     return_encoder_output=True
             )
-
         outs = []
         num_level = len(mlvl_feats)
         start = 0
@@ -330,36 +329,15 @@ class RankBasedCoDeformDETRHead(DETRHead):
             bbox_targets = bbox_targets.reshape(num_imgs * num_q, 4)
             bbox_weights = bbox_weights.reshape(num_imgs * num_q, 4)
         except:
-            return cls_scores.mean()*0, cls_scores.mean()*0, cls_scores.mean()*0, cls_scores.mean()*0
-
+            #return cls_scores.mean()*0, cls_scores.mean()*0, cls_scores.mean()*0, cls_scores.mean()*0
+            return cls_scores.mean()*0, cls_scores.mean()*0, cls_scores.mean()*0
 
         bg_class_ind = self.num_classes
         num_total_pos = len(((labels >= 0) & (labels < bg_class_ind)).nonzero().squeeze(1))
         pos_inds = ((labels >= 0) & (labels < bg_class_ind)).nonzero().squeeze(1)
-        num_total_neg = num_imgs*num_q - num_total_pos
+        
         cls_scores = cls_scores.reshape(-1, self.cls_out_channels)
-        # classification loss
         
-        # construct weighted avg_factor to match with the official DETR repo
-        cls_avg_factor = num_total_pos * 1.0 + \
-            num_total_neg * self.bg_cls_weight
-        if self.sync_cls_avg_factor:
-            cls_avg_factor = reduce_mean(
-                cls_scores.new_tensor([cls_avg_factor]))
-        cls_avg_factor = max(cls_avg_factor, 1)
-        
-
-        #loss_cls = self.loss_cls(
-        #    cls_scores, labels, label_weights, avg_factor=cls_avg_factor)
-        
-        flat_labels = vectorize_labels(labels, self.num_classes, label_weights)
-        flat_preds = cls_scores.reshape(-1)
-        # Compute the average number of gt boxes across all gpus, for
-        # normalization purposes
-        loss_cls = torch.tensor(0.).to(cls_scores.device)
-        num_total_pos = loss_cls.new_tensor([num_total_pos])
-        num_total_pos = torch.clamp(reduce_mean(num_total_pos), min=1).item()
-
         # construct factors used for rescale bboxes
         factors = []
         for img_meta, bbox_pred in zip(img_metas, bbox_preds):
@@ -380,11 +358,23 @@ class RankBasedCoDeformDETRHead(DETRHead):
 
         pos_bbox_pred = bboxes[pos_inds]
         pos_bbox_targets = bboxes_gt[pos_inds]
-        
+
+        # Ranking loss
+        flat_labels = vectorize_labels(labels, self.num_classes, label_weights)
+        flat_preds = cls_scores.reshape(-1)
         IoU_targets = bbox_overlaps(pos_bbox_pred, pos_bbox_targets, is_aligned=True)
+        
         flat_labels[flat_labels==1]=IoU_targets
 
         ranking_loss, sorting_loss = self.loss_rank.apply(flat_preds, flat_labels, 0.5)
+        weight = self.rank_loss_type['loss_weight']
+        ranking_loss = ranking_loss * weight
+        sorting_loss = sorting_loss * weight
+
+        # Compute the average number of gt boxes across all gpus, for
+        # normalization purposes
+        num_total_pos = ranking_loss.new_tensor([num_total_pos])
+        num_total_pos = torch.clamp(reduce_mean(num_total_pos), min=1).item()
 
         # regression IoU loss, defaultly GIoU loss
         loss_iou = self.loss_iou(
@@ -395,25 +385,21 @@ class RankBasedCoDeformDETRHead(DETRHead):
             bbox_avg_factor = 1
         
         losses_iou = torch.sum(bbox_weights*loss_iou)/bbox_avg_factor
-
-        try:
+        
+        if float(losses_iou.item()) != 0:
             self.SB_weight = (ranking_loss+sorting_loss).detach()/float(losses_iou.item())
-
             losses_iou *= self.SB_weight
-        except:
-            losses_iou *= 0.
-
+  
         # regression L1 loss
         loss_bbox = self.loss_bbox(
             bbox_preds, bbox_targets, bbox_weights, avg_factor=num_total_pos)
-        
-            
+         
         losses_bbox = torch.sum(bbox_weights*loss_bbox)/bbox_avg_factor
-        try:
+
+        if float(losses_bbox.item()) != 0:
             self.SB_weight = (ranking_loss+sorting_loss).detach()/float(losses_bbox.item())
             losses_bbox *= self.SB_weight
-        except:
-            losses_bbox *= 0.
+
         return ranking_loss*self.lambda_1, sorting_loss*self.lambda_1, losses_bbox*self.lambda_1, losses_iou*self.lambda_1
 
     def get_aux_targets(self, pos_coords, img_metas, mlvl_feats, head_idx):
@@ -619,6 +605,7 @@ class RankBasedCoDeformDETRHead(DETRHead):
         all_gt_bboxes_ignore_list = [
             gt_bboxes_ignore for _ in range(num_dec_layers)
         ]
+        
         losses_rank, losses_sort, losses_bbox, losses_iou = multi_apply(
             self.loss_single_aux, all_cls_scores, all_bbox_preds,
             all_labels, all_label_weights, all_bbox_targets, 
@@ -629,8 +616,8 @@ class RankBasedCoDeformDETRHead(DETRHead):
 
         # loss from the last decoder layer
         
-        loss_dict['loss_rank_aux'] = losses_rank[-1]
         
+        loss_dict['loss_rank_aux'] = losses_rank[-1]
         loss_dict['loss_sort_aux'] = losses_sort[-1]
         loss_dict['loss_bbox_aux'] = losses_bbox[-1]
         loss_dict['loss_iou_aux'] = losses_iou[-1]
@@ -861,6 +848,7 @@ class RankBasedCoDeformDETRHead(DETRHead):
             dict[str, Tensor]: A dictionary of loss components for outputs from
                 a single decoder layer.
         """
+
         num_imgs = cls_scores.size(0)
         cls_scores_list = [cls_scores[i] for i in range(num_imgs)]
         bbox_preds_list = [bbox_preds[i] for i in range(num_imgs)]
@@ -873,29 +861,11 @@ class RankBasedCoDeformDETRHead(DETRHead):
         label_weights = torch.cat(label_weights_list, 0)
         bbox_targets = torch.cat(bbox_targets_list, 0)
         bbox_weights = torch.cat(bbox_weights_list, 0)
-        cls_scores = cls_scores.reshape(-1, self.cls_out_channels)
-        # classification loss
         
-        # construct weighted avg_factor to match with the official DETR repo
-        cls_avg_factor = num_total_pos * 1.0 + \
-            num_total_neg * self.bg_cls_weight
-        if self.sync_cls_avg_factor:
-            cls_avg_factor = reduce_mean(
-                cls_scores.new_tensor([cls_avg_factor]))
-        cls_avg_factor = max(cls_avg_factor, 1)
-
-        flat_labels = vectorize_labels(labels, self.num_classes, label_weights)
-        flat_preds = cls_scores.reshape(-1)
-        #loss_cls = self.loss_cls(
-        #    cls_scores, labels, label_weights, avg_factor=cls_avg_factor)
-
-        # Compute the average number of gt boxes across all gpus, for
-        # normalization purposes
-        loss_cls = torch.tensor(0.).to(cls_scores.device)
-        num_total_pos = loss_cls.new_tensor([num_total_pos])
-        num_total_pos = torch.clamp(reduce_mean(num_total_pos), min=1).item()
         bg_class_ind = self.num_classes
+        num_total_pos = len(((labels >= 0) & (labels < bg_class_ind)).nonzero().squeeze(1))
         pos_inds = ((labels >= 0) & (labels < bg_class_ind)).nonzero().squeeze(1)
+
         # construct factors used for rescale bboxes
         factors = []
         for img_meta, bbox_pred in zip(img_metas, bbox_preds):
@@ -916,37 +886,48 @@ class RankBasedCoDeformDETRHead(DETRHead):
         pos_bbox_pred = bboxes[pos_inds]
         pos_bbox_targets = bboxes_gt[pos_inds]
 
+        cls_scores = cls_scores.reshape(-1, self.cls_out_channels)
+        flat_labels = vectorize_labels(labels, self.num_classes, label_weights)
+        flat_preds = cls_scores.reshape(-1)
         IoU_targets = bbox_overlaps(pos_bbox_pred, pos_bbox_targets, is_aligned=True)
         flat_labels[flat_labels==1]=IoU_targets
 
+        # Ranking loss
         ranking_loss, sorting_loss = self.loss_rank.apply(flat_preds, flat_labels, 0.5)
+        weight = self.rank_loss_type['loss_weight']
+        ranking_loss = ranking_loss * weight
+        sorting_loss = sorting_loss * weight
+        # Compute the average number of gt boxes across all gpus, for
+        # normalization purposes
+        num_total_pos = ranking_loss.new_tensor([num_total_pos])
+        num_total_pos = torch.clamp(reduce_mean(num_total_pos), min=1).item()        
 
         # regression L1 loss
         loss_bbox = self.loss_bbox(
             bbox_preds, bbox_targets, bbox_weights, avg_factor=num_total_pos)
-
+        
         bbox_avg_factor = torch.sum(bbox_weights)
         if bbox_avg_factor < EPS:
             bbox_avg_factor = 1
             
         losses_bbox = torch.sum(bbox_weights*loss_bbox)/bbox_avg_factor
-        try:
+
+        if float(losses_bbox.item()) != 0:
             self.SB_weight = (ranking_loss+sorting_loss).detach()/float(losses_bbox.item())
             losses_bbox *= self.SB_weight
-        except Exception as e:
-            losses_bbox *= 0.
+ 
         # regression IoU loss, defaultly GIoU loss
+
         loss_iou = self.loss_iou(
             bboxes, bboxes_gt, bbox_weights, avg_factor=num_total_pos)
+        
         losses_iou = torch.sum(bbox_weights*loss_iou)/bbox_avg_factor
 
-        try:
+        if float(losses_iou.item()) != 0:
             self.SB_weight = (ranking_loss+sorting_loss).detach()/float(losses_iou.item())
             losses_iou *= self.SB_weight
-        except:
-            losses_iou *= 0
-        return ranking_loss, sorting_loss, losses_bbox, losses_iou
 
+        return ranking_loss, sorting_loss, losses_bbox, losses_iou
 
 
     def get_targets(self,
@@ -1042,7 +1023,6 @@ class RankBasedCoDeformDETRHead(DETRHead):
                 - pos_inds (Tensor): Sampled positive indices for each image.
                 - neg_inds (Tensor): Sampled negative indices for each image.
         """
-
         num_bboxes = bbox_pred.size(0)
         ori_gt_bboxes_ignore = gt_bboxes_ignore
         gt_bboxes_ignore = None

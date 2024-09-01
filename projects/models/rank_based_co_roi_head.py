@@ -1,12 +1,12 @@
 import torch
 import numpy as np
 from mmdet.core import bbox2result, bbox2roi, build_assigner, build_sampler
-from ..builder import HEADS, build_head, build_roi_extractor
-from .standard_roi_head import StandardRoIHead
+from mmdet.models.builder import HEADS, build_head, build_roi_extractor
+from mmdet.models.roi_heads.standard_roi_head import StandardRoIHead
 import pdb
 
 @HEADS.register_module()
-class RankBasedStandardRoIHead(StandardRoIHead):
+class RankBasedCoRoIHead(StandardRoIHead):
 
     def forward_train(self,
                       x,
@@ -188,6 +188,3 @@ class RankBasedStandardRoIHead(StandardRoIHead):
                 min_idx += pos_num_i
 
             return sampling_results, bbox_weights_
-
-
-
