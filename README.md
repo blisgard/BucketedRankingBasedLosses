@@ -24,6 +24,18 @@ The official implementation of Bucketed Ranking-based Losses. Our implementation
   <img src="figures/performance_comparison.png" width="600">
 </p>
 
+## How to Cite
+
+Please cite the paper if you benefit from our paper or the repository:
+```
+@inproceedings{BRLoss,
+       title = {Bucketed Ranking-based Losses for Efficient Training of Object Detectors},
+       author = {Feyza Yavuz and Baris Can Cam and Adnan Harun Dogan and Kemal Oksuz and Emre Akbas and Sinan Kalkan},
+       booktitle = {European Conference on Computer Vision (ECCV)},
+       year = {2024}
+}
+```
+
 ## Model Zoo
 
 ## Running
