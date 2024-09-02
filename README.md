@@ -85,5 +85,5 @@ We refer to the [RS Loss](http://github.com/kemaloksuz/RankSortLoss) repository 
 
 
 
-## Licence
+### Licence
 This project is released under the MIT license. Please see the [LICENSE](LICENSE) file for more information.
