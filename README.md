@@ -1,6 +1,11 @@
 # Bucketed Ranking-based Losses for Efficient Training of Object Detectors
 
-Official PyTorch Implementation of Bucketed Ranking-based Losses for Efficient Training of Object Detectors [ECCV2024].
+The official implementation of Bucketed Ranking-based Losses. Our implementation is based on [mmdetection](https://github.com/open-mmlab/mmdetection).
+
+> [**Bucketed Ranking-based Losses for Efficient Training of Object Detectors**](https://arxiv.org/abs/2407.14204),            
+> Feyza Yavuz, Baris Can Cam, Adnan Harun Dogan, [Kemal Oksuz](https://kemaloksuz.github.io/), [Emre Akbas](http://user.ceng.metu.edu.tr/~emre/), [Sinan Kalkan](http://www.kovan.ceng.metu.edu.tr/~sinan/),
+> *ECCV 2024. ([arXiv pre-print](https://arxiv.org/abs/2407.14204))*
+
 
 
 ## Introduction
