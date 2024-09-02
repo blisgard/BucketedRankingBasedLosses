@@ -10,7 +10,12 @@ The official implementation of Bucketed Ranking-based Losses. Our implementation
 
 ## Introduction
 
-![teaser](figures/merged_teaser.png)
+Bucketing for ranking-based losses enhances the efficiency of such losses in object detection by grouping negative predictions into buckets, significantly reducing the number of pairwise comparisons required during training. Bucketing maintains the alignment with evaluation criteria and robustness against class imbalance of ranking-based loss functions while drastically improving the time complexity.
+
+<p align="center">
+  <img src="figures/ranking_comparison.png" width="600">
+</p>
+
 
 In this paper, we propose anovel bucketing approach to improve the efficiency of computationally-expensive ranking-based losses to train object detectors. 
 
