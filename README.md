@@ -56,10 +56,33 @@ We refer to the [RS Loss](http://github.com/kemaloksuz/RankSortLoss) repository 
 |    ResNet-101 | 36 |  RS  | - | 47.3 |  [log]()| [config]() | [model]() |
 |    ResNet-101 | 36 |  BRS  | 2.0x &#8595; | 47.7 |  [log]()| [config]() | [model]() |
 
-#### Cascade R-CNN
+#### Cascade R-CNN
 
+|    Backbone     |  Epoch |  Loss Func. | Time | box AP |  Log  | Config | Model |
+| :-------------: | :-----: | :-----: | :------------: | :------------: | :------------: | :-------: | :-------: |
+|    ResNet-50 | 12 |  RS  | - | 41. |  [log]()| [config]() | [model]() |
+|    ResNet-50 | 12 |  BRS  | 5.3x &#8595; | 41.1 |  [log]()| [config]() | [model]() |
 
 ### One-stage Object Detection
+
+#### ATSS
+
+|    Backbone     |  Epoch |  Loss Func. | Time | box AP |  Log  | Config | Model |
+| :-------------: | :-----: | :-----: | :------------: | :------------: | :------------: | :-------: | :-------: |
+|    ResNet-50 | 12 |  AP  | - | 38.1 |  [log]()| [config]() | [model]() |
+|    ResNet-50 | 12 |  BAP  | 2.1x &#8595; | 38.5 |  [log]()| [config]() | [model]() |
+|    ResNet-50 | 12 |  RS  | - | 39.8 |  [log]()| [config]() | [model]() |
+|    ResNet-50 | 12 |  BRS  | 2.4x &#8595; | 39.8 |  [log]()| [config]() | [model]() |
+
+#### PAA
+
+|    Backbone     |  Epoch |  Loss Func. | Time | box AP |  Log  | Config | Model |
+| :-------------: | :-----: | :-----: | :------------: | :------------: | :------------: | :-------: | :-------: |
+|    ResNet-50 | 12 |  AP  | - | 37.3 |  [log]()| [config]() | [model]() |
+|    ResNet-50 | 12 |  BAP  | 1.5x &#8595; | 37.2 |  [log]()| [config]() | [model]() |
+|    ResNet-50 | 12 |  RS  | - | 40.8 |  [log]()| [config]() | [model]() |
+|    ResNet-50 | 12 |  BRS  | 1.9x &#8595; | 40.9 |  [log]()| [config]() | [model]() |
+
 
 
 ## Licence
