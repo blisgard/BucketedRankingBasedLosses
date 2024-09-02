@@ -47,7 +47,7 @@ Here, we report validation set results for object detection and instance segment
 We refer to the [RS Loss](http://github.com/kemaloksuz/RankSortLoss) repository for models trained with RS Loss. 
 
 ### Multi-stage Object Detection
-#### Faster R-CNN
+#### Faster R-CNN
 
 |    Backbone     |  Epoch |  Loss Func. | Time | box AP |  Log  | Config | Model |
 | :-------------: | :-----: | :-----: | :------------: | :------------: | :------------: | :-------: | :-------: |
