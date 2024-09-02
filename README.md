@@ -52,9 +52,9 @@ We refer to the [RS Loss](http://github.com/kemaloksuz/RankSortLoss) repository 
 |    Backbone     |  Epoch |  Loss Func. | Time | box AP |  Log  | Config | Model |
 | :-------------: | :-----: | :-----: | :------------: | :------------: | :------------: | :-------: | :-------: |
 |    ResNet-50 | 12 |  RS  | - | 39.4 |  [log]()| [config]() | [model]() |
-|^ | 12 |  BRS  | 3.0x &#8595; | 39.5 |  [log]()| [config]() | [model]() |
+|    ResNet-50 | 12 |  BRS  | 3.0x &#8595; | 39.5 |  [log]()| [config]() | [model]() |
 |    ResNet-101 | 36 |  RS  | - | 47.3 |  [log]()| [config]() | [model]() |
-|^ | 36 |  BRS  | 2.0x &#8595; | 47.7 |  [log]()| [config]() | [model]() |
+|    ResNet-101 | 36 |  BRS  | 2.0x &#8595; | 47.7 |  [log]()| [config]() | [model]() |
 
 #### Cascade R-CNN
 
