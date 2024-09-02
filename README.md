@@ -60,7 +60,7 @@ We refer to the [RS Loss](http://github.com/kemaloksuz/RankSortLoss) repository 
 
 |    Backbone     |  Epoch |  Loss Func. | Time | box AP |  Log  | Config | Model |
 | :-------------: | :-----: | :-----: | :------------: | :------------: | :------------: | :-------: | :-------: |
-|    ResNet-50 | 12 |  RS  | - | 41. |  [log]()| [config]() | [model]() |
+|    ResNet-50 | 12 |  RS  | - | 41.1 |  [log]()| [config]() | [model]() |
 |    ResNet-50 | 12 |  BRS  | 5.3x &#8595; | 41.1 |  [log]()| [config]() | [model]() |
 
 ### One-stage Object Detection
