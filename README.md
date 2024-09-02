@@ -44,4 +44,23 @@ Please note that, we implement our method on [MMDetection V2.25.3](https://githu
 ## Trained Models
 Here, we report validation set results for object detection and instance segmentation tasks. For object detection we report results on COCO validation set. For instance segmentation we report results on both Cityscapes and LVIS validation sets.
 
+We refer to the [RS Loss](http://github.com/kemaloksuz/RankSortLoss) repository for models trained with RS Loss. 
+
+### Multi-stage Object Detection
+#### Faster R-CNN
+
+|    Backbone     |  Epoch |  Loss Func. | Time | box AP |  Log  | Config | Model |
+| :-------------: | :-----: | :-----: | :------------: | :------------: | :------------: | :-------: | :-------: |
+|    ResNet-50 | 12 |  RS  | 39.4 | - |  |[log]()| [config]() | [model]() |
+|    ResNet-50 | 12 |  BRS  | 39.5 | 3.0x &#8595; |  |[log]()| [config]() | [model]() |
+|    ResNet-101 | 36 |  RS  | 47.3 | - |  |[log]()| [config]() | [model]() |
+|    ResNet-101 | 36 |  BRS  | 47.7 | 2.0x &#8595; |  |[log]()| [config]() | [model]() |
+
+#### Cascade R-CNN
+
+
+### One-stage Object Detection
+
+
+## Licence
 This project is released under the MIT license. Please see the [LICENSE](LICENSE) file for more information.
