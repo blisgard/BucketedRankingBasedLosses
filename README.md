@@ -41,42 +41,7 @@ Please cite the paper if you benefit from our paper or the repository:
 
 Please note that, we implement our method on [MMDetection V2.25.3](https://github.com/open-mmlab/mmdetection/releases/tag/v2.25.3) and [MMCV V1.5.0](https://github.com/open-mmlab/mmcv/releases/tag/v1.5.0). More specifically, we use ```python=3.7.11, pytorch=1.11.0, cuda=11.3``` versions.
 
-## Model Zoo
-
-### Data
-The COCO dataset and LVIS dataset should be organized as:
-```
-BucketedRankingBasedLosses
-└── data
-    ├── coco
-    │   ├── annotations
-    │   │      ├── instances_train2017.json
-    │   │      └── instances_val2017.json
-    │   ├── train2017
-    │   └── val2017
-    │
-    └── lvis_v1
-        ├── annotations
-        │      ├── lvis_v1_train.json
-        │      └── lvis_v1_val.json
-        ├── train2017
-        └── val2017        
-```
-
-### Training
-
-
-### Testing
-
-
-## Cite 
-
-If you find this repository useful, please use the following BibTeX entry for citation.
-
-```latex
-
-```
-
-## License
+## Trained Models
+Here, we report validation set results for object detection and instance segmentation tasks. For object detection we report results on COCO validation set. For instance segmentation we report results on both Cityscapes and LVIS validation sets.
 
 This project is released under the MIT license. Please see the [LICENSE](LICENSE) file for more information.
