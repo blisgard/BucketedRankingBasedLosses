@@ -83,6 +83,22 @@ We refer to the [RS Loss](http://github.com/kemaloksuz/RankSortLoss) repository 
 |    ResNet-50 | 12 |  RS  | - | 40.8 |  [log]()| [config]() | [model]() |
 |    ResNet-50 | 12 |  BRS  | 1.9x &#8595; | 40.9 |  [log]()| [config]() | [model]() |
 
+### Instance Segmentation
+We use Mask R-CNN as the baseline model to experiment with our method in the instance segmentation task.
+
+#### Coco Val
+
+|    Backbone     |  Epoch |  Loss Func. | Time | box AP |  Log  | Config | Model |
+| :-------------: | :-----: | :-----: | :------------: | :------------: | :------------: | :-------: | :-------: |
+|    ResNet-50 | 12 |  RS  | - | 36.3 |  [log]()| [config]() | [model]() |
+|    ResNet-50 | 12 |  BRS  | 2.3x &#8595; | 36.2 |  [log]()| [config]() | [model]() |
+|    ResNet-101 | 12 |  RS  | - | 40.2 |  [log]()| [config]() | [model]() |
+|    ResNet-101 | 12 |  BRS  | 2.2x &#8595; | 40.3 |  [log]()| [config]() | [model]() |
+
+
+
+
+
 
 
 ### Licence
