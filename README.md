@@ -109,7 +109,6 @@ We use Mask R-CNN as the baseline model to experiment with our method in the ins
 | :-------------: | :-----: | :-----: | :------------: | :------------: | :------------: | :-------: | :-------: |
 |    ResNet-50 | 12 |  RS  | - | 43.5 |  [log]()| [config]() | [model]() |
 |    ResNet-50 | 12 |  BRS  | 2.3x &#8595; | 43.3 |  [log]()| [config]() | [model]() |
-|
 #### LVIS
 |    Backbone     |  Epoch |  Loss Func. | Time | mask AP |  Log  | Config | Model |
 | :-------------: | :-----: | :-----: | :------------: | :------------: | :------------: | :-------: | :-------: |
