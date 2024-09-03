@@ -83,23 +83,38 @@ We refer to the [RS Loss](http://github.com/kemaloksuz/RankSortLoss) repository 
 |    ResNet-50 | 12 |  RS  | - | 40.8 |  [log]()| [config]() | [model]() |
 |    ResNet-50 | 12 |  BRS  | 1.9x &#8595; | 40.9 |  [log]()| [config]() | [model]() |
 
+#### Co-DETR
+
+|    Backbone     |  Epoch |  Detector | box AP |  Log  | Config | Model |
+| :-------------: | :-----: | :-----: | :------------: | :------------: | :-------: | :-------: |
+|    ResNet-50 | 12 |  Co-DETR  | 49.3 |  [log]()| [config]() | [model]() |
+|    ResNet-50 | 12 |  BRS-DETR  |  50.1 |  [log]()| [config]() | [model]() |
+|    Swin-T | 12 |  Co-DETR  | 51.7 |  [log]()| [config]() | [model]() |
+|    Swin-T | 12 |  BRS-DETR  |  52.3 |  [log]()| [config]() | [model]() |
+|    Swin-L | 12 |  Co-DETR  | 56.9 |  [log]()| [config]() | [model]() |
+|    Swin-L | 12 |  BRS-DETR  | 57.2 |  [log]()| [config]() | [model]() |
+
 ### Instance Segmentation
 We use Mask R-CNN as the baseline model to experiment with our method in the instance segmentation task.
 
-#### Coco Val
-
-|    Backbone     |  Epoch |  Loss Func. | Time | box AP |  Log  | Config | Model |
+#### Coco Val
+|    Backbone     |  Epoch |  Loss Func. | Time | mask AP |  Log  | Config | Model |
 | :-------------: | :-----: | :-----: | :------------: | :------------: | :------------: | :-------: | :-------: |
 |    ResNet-50 | 12 |  RS  | - | 36.3 |  [log]()| [config]() | [model]() |
 |    ResNet-50 | 12 |  BRS  | 2.3x &#8595; | 36.2 |  [log]()| [config]() | [model]() |
 |    ResNet-101 | 12 |  RS  | - | 40.2 |  [log]()| [config]() | [model]() |
 |    ResNet-101 | 12 |  BRS  | 2.2x &#8595; | 40.3 |  [log]()| [config]() | [model]() |
+#### Cityscapes
+|    Backbone     |  Epoch |  Loss Func. | Time | mask AP |  Log  | Config | Model |
+| :-------------: | :-----: | :-----: | :------------: | :------------: | :------------: | :-------: | :-------: |
+|    ResNet-50 | 12 |  RS  | - | 43.5 |  [log]()| [config]() | [model]() |
+|    ResNet-50 | 12 |  BRS  | 2.3x &#8595; | 43.3 |  [log]()| [config]() | [model]() |
+|
+#### LVIS
+|    Backbone     |  Epoch |  Loss Func. | Time | mask AP |  Log  | Config | Model |
+| :-------------: | :-----: | :-----: | :------------: | :------------: | :------------: | :-------: | :-------: |
+|    ResNet-50 | 12 |  RS  | - | 25.6 |  [log]()| [config]() | [model]() |
+|    ResNet-50 | 12 |  BRS  | 2.5x &#8595; | 25.8 |  [log]()| [config]() | [model]() |
 
-
-
-
-
-
-
-### Licence
+### License
 This project is released under the MIT license. Please see the [LICENSE](LICENSE) file for more information.
