@@ -46,6 +46,17 @@ Here, we report validation set results for object detection and instance segment
 
 We refer to the [RS Loss](http://github.com/kemaloksuz/RankSortLoss) repository for models trained with RS Loss. 
 
+### Transformer-based Object Detection
+#### Co-DETR
+|    Backbone     |  Epoch |  Detector | box AP |  Log  | Config | Model |
+| :-------------: | :-----: | :-----: | :------------: | :------------: | :-------: | :-------: |
+|    ResNet-50 | 12 |  Co-DETR  | 49.3 |  [log]()| [config]() | [model]() |
+|    ResNet-50 | 12 |  BRS-DETR  |  50.1 |  [log]()| [config]() | [model]() |
+|    Swin-T | 12 |  Co-DETR  | 51.7 |  [log]()| [config]() | [model]() |
+|    Swin-T | 12 |  BRS-DETR  |  52.3 |  [log]()| [config]() | [model]() |
+|    Swin-L | 12 |  Co-DETR  | 56.9 |  [log]()| [config]() | [model]() |
+|    Swin-L | 12 |  BRS-DETR  | 57.2 |  [log]()| [config]() | [model]() |
+
 ### Multi-stage Object Detection
 #### Faster R-CNN
 
@@ -82,17 +93,6 @@ We refer to the [RS Loss](http://github.com/kemaloksuz/RankSortLoss) repository 
 |    ResNet-50 | 12 |  BAP  | 1.5x &#8595; | 37.2 |  [log]()| [config]() | [model]() |
 |    ResNet-50 | 12 |  RS  | - | 40.8 |  [log]()| [config]() | [model]() |
 |    ResNet-50 | 12 |  BRS  | 1.9x &#8595; | 40.9 |  [log]()| [config]() | [model]() |
-
-#### Co-DETR
-
-|    Backbone     |  Epoch |  Detector | box AP |  Log  | Config | Model |
-| :-------------: | :-----: | :-----: | :------------: | :------------: | :-------: | :-------: |
-|    ResNet-50 | 12 |  Co-DETR  | 49.3 |  [log]()| [config]() | [model]() |
-|    ResNet-50 | 12 |  BRS-DETR  |  50.1 |  [log]()| [config]() | [model]() |
-|    Swin-T | 12 |  Co-DETR  | 51.7 |  [log]()| [config]() | [model]() |
-|    Swin-T | 12 |  BRS-DETR  |  52.3 |  [log]()| [config]() | [model]() |
-|    Swin-L | 12 |  Co-DETR  | 56.9 |  [log]()| [config]() | [model]() |
-|    Swin-L | 12 |  BRS-DETR  | 57.2 |  [log]()| [config]() | [model]() |
 
 ### Instance Segmentation
 We use Mask R-CNN as the baseline model to experiment with our method in the instance segmentation task.
