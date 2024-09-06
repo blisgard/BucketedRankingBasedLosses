@@ -329,8 +329,6 @@ class RankBasedCoDeformDETRHead(DETRHead):
             bbox_targets = bbox_targets.reshape(num_imgs * num_q, 4)
             bbox_weights = bbox_weights.reshape(num_imgs * num_q, 4)
         except:
-            print("here")
-            #return cls_scores.mean()*0, cls_scores.mean()*0, cls_scores.mean()*0, cls_scores.mean()*0
             return cls_scores.mean()*0, cls_scores.mean()*0, cls_scores.mean()*0
 
         bg_class_ind = self.num_classes

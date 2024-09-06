@@ -10,8 +10,6 @@ from .rpn_test_mixin import RPNTestMixin
 import numpy as np
 import collections
 
-import pdb
-
 @HEADS.register_module()
 class RankBasedRPNHead(RPNTestMixin, AnchorHead):
     """RPN head.
@@ -42,6 +40,8 @@ class RankBasedRPNHead(RPNTestMixin, AnchorHead):
             self.cls_LRP_hist = collections.deque(maxlen=self.period)
             self.reg_LRP_hist = collections.deque(maxlen=self.period)
             self.counter = 0
+        elif self.rank_loss_type['type'] == 'APLoss':
+            self.loss_rank = build_loss(rank_loss_type)
 
     def _init_layers(self):
         """Initialize layers of the head."""

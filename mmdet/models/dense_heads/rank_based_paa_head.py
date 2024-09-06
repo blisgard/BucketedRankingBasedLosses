@@ -81,7 +81,7 @@ class RankBasedPAAHead(QFLHead):
                  score_voting=True,
                  covariance_type='diag',
                  delta = 0.5,
-                 rank_loss_type = 'RankSort',
+                 rank_loss_type = 'BucketedRankSort',
                  **kwargs):
         # topk used in paa reassign process
         self.topk = topk
@@ -104,6 +104,8 @@ class RankBasedPAAHead(QFLHead):
             self.counter = 0
         elif rank_loss_type == 'APLoss':
             self.loss_rank = ranking_losses.APLoss()
+        elif rank_loss_type == 'BucketedAPLoss':
+            self.loss_rank = ranking_losses.BucketedAPLoss()
 
         self.rank_loss_type = rank_loss_type
 
@@ -204,7 +206,7 @@ class RankBasedPAAHead(QFLHead):
                 pos_decode_bbox_targets)
             flat_labels = vectorize_labels(labels, self.num_classes, labels_weight)
             flat_preds = cls_scores.reshape(-1)
-            if self.rank_loss_type == 'aLRP' or self.rank_loss_type=='APLoss':
+            if self.rank_loss_type == 'aLRP' or self.rank_loss_type=='APLoss' or self.rank_loss_type == 'BucketedAPLoss':
                 ranking_loss = self.loss_rank.apply(flat_preds, flat_labels, self.delta)
                 bbox_avg_factor = torch.sum(bbox_weights)
                 if bbox_avg_factor < EPS:

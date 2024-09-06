@@ -64,7 +64,7 @@ class RankBasedATSSHead(AnchorHead):
             self.tau = 0.50
         elif rank_loss_type == 'APLoss':
             self.loss_rank = ranking_losses.APLoss()
-        elif rank_loss_type == 'BucketedAP':
+        elif rank_loss_type == 'BucketedAPLoss':
             self.loss_rank = ranking_losses.BucketedAPLoss()
         elif rank_loss_type == 'DRLoss':
             self.loss_rank = build_loss(dict(type='SigmoidDRLoss'))
@@ -264,7 +264,7 @@ class RankBasedATSSHead(AnchorHead):
                 losses_bbox *= self.SB_weight
 
                 return dict(loss_rank=ranking_loss, loss_sort=sorting_loss, loss_bbox=losses_bbox)
-            elif self.rank_loss_type == 'APLoss' or self.rank_loss_type == 'BucketedAP' or self.rank_loss_type == 'aLRP':
+            elif self.rank_loss_type == 'APLoss' or self.rank_loss_type == 'BucketedAPLoss' or self.rank_loss_type == 'aLRP':
                 losses_cls = self.loss_rank.apply(flat_preds, flat_labels, 1.0)
                 bbox_avg_factor = torch.sum(bbox_weights)
                 if bbox_avg_factor < EPS:
