@@ -64,17 +64,17 @@ We refer to the [RS Loss](http://github.com/kemaloksuz/RankSortLoss) repository 
 
 |    Backbone     |  Epoch |  Loss Func. | Time | box AP |  Log  | Config | Model |
 | :-------------: | :-----: | :-----: | :------------: | :------------: | :------------: | :-------: | :-------: |
-|    ResNet-50 | 12 |  RS  | - | 39.4 |  [log]()| [config]() | [model]() |
-|    ResNet-50 | 12 |  BRS  | 3.0x &#8595; | 39.5 |  [log]()| [config]() | [model]() |
-|    ResNet-101 | 36 |  RS  | - | 47.3 |  [log]()| [config]() | [model]() |
-|    ResNet-101 | 36 |  BRS  | 2.0x &#8595; | 47.7 |  [log]()| [config]() | [model]() |
+|    ResNet-50 | 12 |  RS  | TODO | 39.4 |  [log]()| [config]() | [model]() |
+|    ResNet-50 | 12 |  BRS  | 0.19 (3.0x &#8595;) | 39.5 |  [log]()| [config]() | [model]() |
+|    ResNet-101 | 36 |  RS  | TODO | 47.3 |  [log]()| [config]() | [model]() |
+|    ResNet-101 | 36 |  BRS  | 0.47 (2.0x &#8595;) | 47.7 |  [log]()| [config]() | [model]() |
 
 #### Cascade R-CNN
 
 |    Backbone     |  Epoch |  Loss Func. | Time | box AP |  Log  | Config | Model |
 | :-------------: | :-----: | :-----: | :------------: | :------------: | :------------: | :-------: | :-------: |
-|    ResNet-50 | 12 |  RS  | - | 41.1 |  [log]()| [config]() | [model]() |
-|    ResNet-50 | 12 |  BRS  | 5.3x &#8595; | 41.1 |  [log]()| [config]() | [model]() |
+|    ResNet-50 | 12 |  RS  | 1.54 | 41.1 |  [log]()| [config]() | [model]() |
+|    ResNet-50 | 12 |  BRS  | 0.29 (5.3x &#8595;) | 41.1 |  [log]()| [config]() | [model]() |
 
 ### One-stage Object Detection
 
@@ -82,19 +82,19 @@ We refer to the [RS Loss](http://github.com/kemaloksuz/RankSortLoss) repository 
 
 |    Backbone     |  Epoch |  Loss Func. | Time | box AP |  Log  | Config | Model |
 | :-------------: | :-----: | :-----: | :------------: | :------------: | :------------: | :-------: | :-------: |
-|    ResNet-50 | 12 |  AP  | - | 38.1 |  [log]()| [config]() | [model]() |
-|    ResNet-50 | 12 |  BAP  | 2.1x &#8595; | 38.5 |  [log]()| [config]() | [model]() |
-|    ResNet-50 | 12 |  RS  | - | 39.8 |  [log]()| [config]() | [model]() |
-|    ResNet-50 | 12 |  BRS  | 2.4x &#8595; | 39.8 |  [log]()| [config]() | [model]() |
+|    ResNet-50 | 12 |  AP  | TODO | 38.1 |  [log]()| [config]() | [model]() |
+|    ResNet-50 | 12 |  BAP  | 0.19 (2.1x &#8595;) | 38.5 |  [log]()| [config]() | [model]() |
+|    ResNet-50 | 12 |  RS  | 0.44 | 39.8 |  [log]()| [config]() | [model]() |
+|    ResNet-50 | 12 |  BRS  | 0.19 (2.36x &#8595;) | 39.8 |  [log]()| [config]() | [model]() |
 
 #### PAA
 
 |    Backbone     |  Epoch |  Loss Func. | Time | box AP |  Log  | Config | Model |
 | :-------------: | :-----: | :-----: | :------------: | :------------: | :------------: | :-------: | :-------: |
-|    ResNet-50 | 12 |  AP  | - | 37.3 |  [log]()| [config]() | [model]() |
-|    ResNet-50 | 12 |  BAP  | 1.5x &#8595; | 37.2 |  [log]()| [config]() | [model]() |
-|    ResNet-50 | 12 |  RS  | - | 40.8 |  [log]()| [config]() | [model]() |
-|    ResNet-50 | 12 |  BRS  | 1.9x &#8595; | 40.9 |  [log]()| [config]() | [model]() |
+|    ResNet-50 | 12 |  AP  | TODO | 37.3 |  [log]()| [config]() | [model]() |
+|    ResNet-50 | 12 |  BAP  | TODO 1.5x &#8595; | 37.2 |  [log]()| [config]() | [model]() |
+|    ResNet-50 | 12 |  RS  | TODO | 40.8 |  [log]()| [config]() | [model]() |
+|    ResNet-50 | 12 |  BRS  | TODO 1.9x &#8595; | 40.9 |  [log]()| [config]() | [model]() |
 
 ### Instance Segmentation
 We use Mask R-CNN as the baseline model to experiment with our method in the instance segmentation task.
@@ -102,20 +102,20 @@ We use Mask R-CNN as the baseline model to experiment with our method in the ins
 #### Coco Val
 |    Backbone     |  Epoch |  Loss Func. | Time | mask AP |  Log  | Config | Model |
 | :-------------: | :-----: | :-----: | :------------: | :------------: | :------------: | :-------: | :-------: |
-|    ResNet-50 | 12 |  RS  | - | 36.3 |  [log]()| [config]() | [model]() |
-|    ResNet-50 | 12 |  BRS  | 2.3x &#8595; | 36.2 |  [log]()| [config]() | [model]() |
-|    ResNet-101 | 12 |  RS  | - | 40.2 |  [log]()| [config]() | [model]() |
-|    ResNet-101 | 12 |  BRS  | 2.2x &#8595; | 40.3 |  [log]()| [config]() | [model]() |
+|    ResNet-50 | 12 |  RS  | 0.68 | 36.3 |  [log]()| [config]() | [model]() |
+|    ResNet-50 | 12 |  BRS  | 0.29 (2.3x &#8595;) | 36.2 |  [log]()| [config]() | [model]() |
+|    ResNet-101 | 12 |  RS  | 0.71 | 40.2 |  [log]()| [config]() | [model]() |
+|    ResNet-101 | 12 |  BRS  | 0.33 (2.2x &#8595;) | 40.3 |  [log]()| [config]() | [model]() |
 #### Cityscapes
 |    Backbone     |  Epoch |  Loss Func. | Time | mask AP |  Log  | Config | Model |
 | :-------------: | :-----: | :-----: | :------------: | :------------: | :------------: | :-------: | :-------: |
-|    ResNet-50 | 12 |  RS  | - | 43.5 |  [log]()| [config]() | [model]() |
-|    ResNet-50 | 12 |  BRS  | 2.3x &#8595; | 43.3 |  [log]()| [config]() | [model]() |
+|    ResNet-50 | 12 |  RS  | 0.43 | 43.5 |  [log]()| [config]() | [model]() |
+|    ResNet-50 | 12 |  BRS  | 0.19 (2.3x &#8595;) | 43.3 |  [log]()| [config]() | [model]() |
 #### LVIS
 |    Backbone     |  Epoch |  Loss Func. | Time | mask AP |  Log  | Config | Model |
 | :-------------: | :-----: | :-----: | :------------: | :------------: | :------------: | :-------: | :-------: |
-|    ResNet-50 | 12 |  RS  | - | 25.6 |  [log]()| [config]() | [model]() |
-|    ResNet-50 | 12 |  BRS  | 2.5x &#8595; | 25.8 |  [log]()| [config]() | [model]() |
+|    ResNet-50 | 12 |  RS  | 0.87 | 25.6 |  [log]()| [config]() | [model]() |
+|    ResNet-50 | 12 |  BRS  | 0.35 (2.5x &#8595;) | 25.8 |  [log]()| [config]() | [model]() |
 
 ### License
 This project is released under the MIT license. Please see the [LICENSE](LICENSE) file for more information.
