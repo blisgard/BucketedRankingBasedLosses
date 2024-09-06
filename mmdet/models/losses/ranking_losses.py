@@ -140,9 +140,8 @@ class BucketedRankSort(torch.autograd.Function):
             grad[p_and_n_indices[sorted_p_and_n_indices[allabels_p]]] = -duplication_fg
 
             grad[p_and_n_indices[sorted_p_and_n_indices[allabels_p]]] -= sorting_error * (sorting_pmf_denom != 0.)
+            sorting_pmf_denom[(sorting_pmf_denom == 0).nonzero()] = 1
             x = sorting_error / sorting_pmf_denom
-            x[torch.isnan(x)] = 0
-            x[torch.isinf(x)] = 0
             # For positives, distribute error via sorting pmf (i.e. missorted_examples/sorting_pmf_denom)
             grad[p_and_n_indices[sorted_p_and_n_indices[allabels_p]]] += torch.sum(missorted_examples.t() * x, axis=1)
 
@@ -370,7 +369,136 @@ class aLRPLoss(torch.autograd.Function):
     def backward(ctx, out_grad1, out_grad2, out_grad3):
         g1, =ctx.saved_tensors
         return g1*out_grad1, None, None, None, None
-    
+
+class BucketedAPLoss(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, logits, targets, delta=1.):
+
+        grad = torch.zeros(targets.shape).to(logits.device)
+        
+        #Store the original indices of logits and targets
+        old_targets = targets
+        p_indices = torch.nonzero(old_targets > 0.).flatten()
+        n_indices = torch.nonzero(old_targets == 0).flatten()
+        #If no positive logit, return zero loss
+        if len(p_indices) == 0:
+            ctx.save_for_backward(grad)
+            return logits.sum()*0., logits.sum()*0.
+
+        p_and_n_indices = torch.cat((p_indices, n_indices))
+        p_and_n_logits = logits[p_and_n_indices]
+        p_and_n_targets = targets[p_and_n_indices]
+
+        #Sort the logits and targets
+        sorted_p_and_n_logits, sorted_p_and_n_indices = torch.sort(p_and_n_logits, descending=True)
+        sorted_p_and_n_targets = p_and_n_targets[sorted_p_and_n_indices]
+
+        f_indices = sorted_p_and_n_targets > 0.
+        f_logits = sorted_p_and_n_logits[f_indices]
+        f_targets = sorted_p_and_n_targets[f_indices]
+
+        threshold_logit = torch.min(f_logits) - delta
+
+        #Get rid of irrelevant background logits
+        irrelevant_b_index = torch.nonzero(sorted_p_and_n_logits >= threshold_logit)[-1] + 1
+        #Get relevant logits and targets
+        relevant_logits = sorted_p_and_n_logits[0:irrelevant_b_index]
+        relevant_targets = sorted_p_and_n_targets[0: irrelevant_b_index]
+        #Split into foreground and background
+        relevant_f_indices = torch.nonzero(relevant_targets > 0.)
+        relevant_b_indices = torch.nonzero(relevant_targets == 0)
+        #If no relevant targets, return zero loss
+        if len(relevant_targets) == 0 or len(relevant_f_indices) == 0:
+            ctx.save_for_backward(grad)
+            return logits.sum()*0., logits.sum()*0.
+        
+        fg_num = len(f_targets)
+
+        #Calculate background buckets and their sizes
+        bucket_sizes_b = (torch.sub(relevant_f_indices[1:], relevant_f_indices[:len(relevant_f_indices) - 1]) - 1)
+        bucket_sizes_b = torch.cat((torch.tensor([[relevant_f_indices[0]]], device=logits.device), bucket_sizes_b))
+
+        if relevant_f_indices[-1] < relevant_b_indices[-1]:
+            bucket_sizes_b = torch.cat((bucket_sizes_b, torch.tensor([[relevant_b_indices[-1] -  relevant_f_indices[-1]]], device=logits.device)))
+        
+        bucket_sizes_b = bucket_sizes_b[(bucket_sizes_b != 0)]
+        bucket_sizes_b = bucket_sizes_b.reshape((len(bucket_sizes_b), 1))
+        l_bucket_sizes_b = [int(x) for x in torch.Tensor.tolist(bucket_sizes_b.flatten())]
+
+        relevant_bg_buckets = torch.split(relevant_logits[relevant_b_indices], tuple(l_bucket_sizes_b))
+        bg_bucket_mean = torch.Tensor([torch.mean(bucket) for bucket in list(relevant_bg_buckets)]).to(logits.device)
+
+        #No extra bucketing for foreground objects, so their bucket sizes are 1
+        all_buckets = torch.cat((f_logits, bg_bucket_mean))
+
+        #Sort all buckets
+        all_buckets, indices_s = torch.sort(all_buckets, descending=True)
+
+        #Initialize new targets
+        new_targets = torch.zeros(len(all_buckets)).to(logits.device)
+        new_targets[indices_s < len(f_logits)] = sorted_p_and_n_targets[sorted_p_and_n_targets != 0]
+
+        if torch.max(new_targets) <= 0:
+            ctx.save_for_backward(grad)
+            return logits.sum()*0., logits.sum()*0.
+
+        labels_p = (new_targets > 0.)
+        allabels_p = torch.nonzero((sorted_p_and_n_targets > 0.)).flatten()
+        labels_n = torch.nonzero((sorted_p_and_n_targets[:irrelevant_b_index] == 0)).flatten()
+
+        fg_logits = all_buckets[labels_p]
+
+        threshold_logit = torch.min(fg_logits) - delta
+
+        #Ranking loss computation with bucketed logits
+        valid_labels_n = ((new_targets == 0) & (all_buckets >= threshold_logit))
+
+        valid_bg_logits = all_buckets[valid_labels_n]
+
+        bg_relations = (valid_bg_logits[:, None] - fg_logits[None, :]).cuda()
+
+        fg_relations = (fg_logits[:, None] - fg_logits[None, :]).cuda()
+        if delta > 0:
+            fg_relations = torch.clamp(fg_relations / (2 * delta) + 0.5, min=0, max=1)
+            bg_relations = torch.clamp(bg_relations / (2 * delta) + 0.5, min=0, max=1)
+        else:
+            fg_relations = (fg_relations >= 0).float()
+            bg_relations = (bg_relations >= 0).float()
+
+        multiplication_bg = torch.mul(bg_relations, bucket_sizes_b)
+
+        FP_num = torch.sum(multiplication_bg, axis=0)
+        rank_pos = torch.sum(fg_relations, axis=0)
+
+        rank = rank_pos + FP_num
+        ranking_error = (FP_num / rank.float())
+
+        FP_num[(FP_num == 0).nonzero()] = 1
+
+        bucket_grads = (torch.sum(
+            torch.mul(multiplication_bg, ranking_error) / FP_num,
+            axis=1) / bucket_sizes_b.flatten())
+
+        duplication_bg = bucket_grads.repeat_interleave(bucket_sizes_b.flatten().type(torch.LongTensor).cuda())
+
+        duplication_fg = ranking_error
+
+        #Distribute grads into their original positions
+        grad[p_and_n_indices[sorted_p_and_n_indices[:irrelevant_b_index][labels_n]]] = duplication_bg.cuda()
+        grad[p_and_n_indices[sorted_p_and_n_indices[allabels_p]]] = -duplication_fg
+
+        #Normalize gradients by number of positives 
+        grad /= fg_num
+
+        ctx.save_for_backward(grad)
+        return ranking_error.mean()
+
+    @staticmethod
+    def backward(ctx, out_grad1):
+        g1, =ctx.saved_tensors
+        return g1*out_grad1, None, None    
+
+
 @LOSSES.register_module()
 class APLoss(torch.autograd.Function):
     @staticmethod

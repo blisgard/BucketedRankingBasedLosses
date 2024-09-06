@@ -18,7 +18,7 @@ from .seesaw_loss import SeesawLoss
 from .smooth_l1_loss import L1Loss, SmoothL1Loss, l1_loss, smooth_l1_loss
 from .utils import reduce_loss, weight_reduce_loss, weighted_loss
 from .varifocal_loss import VarifocalLoss
-from .ranking_losses import aLRPLoss, APLoss, RankSort, BucketedRankSort
+from .ranking_losses import aLRPLoss, APLoss, BucketedAPLoss, RankSort, BucketedRankSort
 __all__ = [
     'accuracy', 'Accuracy', 'cross_entropy', 'binary_cross_entropy',
     'mask_cross_entropy', 'CrossEntropyLoss', 'sigmoid_focal_loss',
@@ -28,5 +28,5 @@ __all__ = [
     'GHMR', 'reduce_loss', 'weight_reduce_loss', 'weighted_loss', 'L1Loss',
     'l1_loss', 'isr_p', 'carl_loss', 'AssociativeEmbeddingLoss',
     'GaussianFocalLoss', 'QualityFocalLoss', 'DistributionFocalLoss',
-    'VarifocalLoss', 'KnowledgeDistillationKLDivLoss', 'SeesawLoss', 'DiceLoss', 'APLoss', 'aLRPLoss', 'RankSort', 'BucketedRankSort'
+    'VarifocalLoss', 'KnowledgeDistillationKLDivLoss', 'SeesawLoss', 'DiceLoss', 'APLoss', 'BucketedAPLoss', 'aLRPLoss', 'RankSort', 'BucketedRankSort'
 ]
