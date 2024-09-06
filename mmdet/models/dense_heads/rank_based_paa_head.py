@@ -4,7 +4,7 @@ from mmcv.runner import force_fp32
 
 from mmdet.core import multi_apply, multiclass_nms, vectorize_labels
 from mmdet.core.bbox.iou_calculators import bbox_overlaps
-from mmdet.models import HEADS, build_loss
+from mmdet.models import HEADS
 from mmdet.models.dense_heads import QFLHead
 
 EPS = 1e-12
@@ -16,8 +16,6 @@ except ImportError:
 from mmdet.models.losses import ranking_losses
 import numpy as np
 import collections
-from scipy import stats
-import pdb
 
 def levels_to_images(mlvl_tensor):
     """Concat multi-level feature maps by image.
@@ -94,14 +92,6 @@ class RankBasedPAAHead(QFLHead):
             self.loss_rank = ranking_losses.RankSort()
         elif rank_loss_type == 'BucketedRankSort':
             self.loss_rank = ranking_losses.BucketedRankSort()
-        elif rank_loss_type == 'aLRP':
-            self.loss_rank = ranking_losses.aLRPLoss()
-            self.SB_weight = 50
-            self.period = 7330
-            self.cls_LRP_hist = collections.deque(maxlen=self.period)
-            self.reg_LRP_hist = collections.deque(maxlen=self.period)
-            self.tau = 0.50
-            self.counter = 0
         elif rank_loss_type == 'APLoss':
             self.loss_rank = ranking_losses.APLoss()
         elif rank_loss_type == 'BucketedAPLoss':
@@ -193,7 +183,7 @@ class RankBasedPAAHead(QFLHead):
                             &
                             (labels < self.num_classes)).nonzero().reshape(-1)
 
-        if num_pos:
+        if num_pos > 0:
             pos_decode_bbox_pred = self.bbox_coder.decode(
                 flatten_anchors[pos_inds_flatten],
                 bbox_preds[pos_inds_flatten])
@@ -204,17 +194,17 @@ class RankBasedPAAHead(QFLHead):
             loss_bbox = self.loss_bbox(
                 pos_decode_bbox_pred,
                 pos_decode_bbox_targets)
+            
+            bbox_avg_factor = torch.sum(bbox_weights)
+            if bbox_avg_factor < EPS:
+                    bbox_avg_factor = 1
+
+            losses_bbox = torch.sum(bbox_weights*loss_bbox)/bbox_avg_factor
+
             flat_labels = vectorize_labels(labels, self.num_classes, labels_weight)
             flat_preds = cls_scores.reshape(-1)
-            if self.rank_loss_type == 'aLRP' or self.rank_loss_type=='APLoss' or self.rank_loss_type == 'BucketedAPLoss':
-                ranking_loss = self.loss_rank.apply(flat_preds, flat_labels, self.delta)
-                bbox_avg_factor = torch.sum(bbox_weights)
-                if bbox_avg_factor < EPS:
-                    bbox_avg_factor = 1
-                losses_bbox = torch.sum(bbox_weights*loss_bbox)/bbox_avg_factor
-
-                return dict(loss_rank=ranking_loss, loss_bbox=losses_bbox)
-            elif self.rank_loss_type == 'RankSort' or self.rank_loss_type == 'BucketedRankSort':
+            
+            if self.rank_loss_type == 'RankSort' or self.rank_loss_type == 'BucketedRankSort':
             # classification component
             
                 IoU_targets = bbox_overlaps(pos_decode_bbox_pred.detach(), pos_decode_bbox_targets, is_aligned=True)
@@ -222,20 +212,28 @@ class RankBasedPAAHead(QFLHead):
 
                 ranking_loss, sorting_loss = self.loss_rank.apply(flat_preds, flat_labels, self.delta)
 
-                bbox_avg_factor = torch.sum(bbox_weights)
-                if bbox_avg_factor < EPS:
-                    bbox_avg_factor = 1
-                    
-                losses_bbox = torch.sum(bbox_weights*loss_bbox)/bbox_avg_factor
                 self.SB_weight = (ranking_loss+sorting_loss).detach()/float(losses_bbox.item())
                 losses_bbox *= self.SB_weight
-                return dict(loss_rank=ranking_loss, loss_sort=sorting_loss, loss_bbox=losses_bbox)
 
+                return dict(loss_rank=ranking_loss, loss_sort=sorting_loss, loss_bbox=losses_bbox)
+            
+            elif self.rank_loss_type=='APLoss' or self.rank_loss_type == 'BucketedAPLoss':
+
+                ranking_loss = self.loss_rank.apply(flat_preds, flat_labels, self.delta)
+
+                return dict(loss_rank=ranking_loss, loss_bbox=losses_bbox)
         else:
+
+            if self.rank_loss_type == 'RankSort' or self.rank_loss_type == 'BucketedRankSort':
+                ranking_loss = cls_scores.sum() * 0
+                sorting_loss = cls_scores.sum() * 0
+                losses_bbox = bbox_preds.sum() * 0
+                return dict(loss_rank=ranking_loss, loss_sort=sorting_loss, loss_bbox=losses_bbox)
+            
             losses_bbox = bbox_preds.sum() * 0
             ranking_loss = cls_scores.sum() * 0
-            sorting_loss = cls_scores.sum() * 0
-            return dict(loss_rank=ranking_loss, loss_sort=sorting_loss, loss_bbox=losses_bbox)
+
+            return dict(loss_rank=ranking_loss, loss_bbox=losses_bbox)
 
     def get_pos_loss(self, anchors, cls_score, bbox_pred, label, label_weight,
                      bbox_target, bbox_weight, pos_inds):
