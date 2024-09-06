@@ -8,7 +8,6 @@ from ..builder import HEADS, build_loss
 from .anchor_head import AnchorHead
 from .rpn_test_mixin import RPNTestMixin
 import numpy as np
-import collections
 
 @HEADS.register_module()
 class RankBasedRPNHead(RPNTestMixin, AnchorHead):
@@ -28,21 +27,10 @@ class RankBasedRPNHead(RPNTestMixin, AnchorHead):
                 type='BucketedRankSort', loss_weight=1.0), **kwargs):
         super(RankBasedRPNHead, self).__init__(1, in_channels, **kwargs)
         self.head_weight = head_weight
-        self.rank_loss_type = rank_loss_type
-        if self.rank_loss_type['type'] == 'RankSort':
-            self.loss_rank = build_loss(rank_loss_type)
-        elif self.rank_loss_type['type'] == 'BucketedRankSort':
-            self.loss_rank = build_loss(rank_loss_type)
-        elif self.rank_loss_type['type'] == 'aLRP':
-            self.loss_rank = build_loss(rank_loss_type)
-            self.SB_weight = 50
-            self.period = 7330
-            self.cls_LRP_hist = collections.deque(maxlen=self.period)
-            self.reg_LRP_hist = collections.deque(maxlen=self.period)
-            self.counter = 0
-        elif self.rank_loss_type['type'] == 'APLoss':
-            self.loss_rank = build_loss(rank_loss_type)
-
+        self.rank_loss_type = rank_loss_type['type']
+        self.loss_rank = build_loss(rank_loss_type)
+        self.loss_rank_weight = rank_loss_type['loss_weight']
+        
     def _init_layers(self):
         """Initialize layers of the head."""
         self.rpn_conv = nn.Conv2d(
@@ -140,58 +128,35 @@ class RankBasedRPNHead(RPNTestMixin, AnchorHead):
             pos_pred = self.delta2bbox(torch.cat(all_bbox_preds)[pos_idx])
             pos_target = self.delta2bbox(torch.cat(all_bbox_targets)[pos_idx])
             loss_bbox = self.loss_bbox(pos_pred, pos_target)
+            pos_weights = all_scores.detach().sigmoid().max(dim=1)[0][pos_idx]
+            bbox_avg_factor = torch.sum(pos_weights)
+            if bbox_avg_factor < 1e-10:
+                bbox_avg_factor = 1
 
-            # flat_labels = self.flatten_labels(cls_labels, torch.cat(all_label_weights))
+            loss_bbox = torch.sum(pos_weights*loss_bbox)/bbox_avg_factor
+            
             flat_labels = vectorize_labels(cls_labels, self.num_classes, torch.cat(all_label_weights))
             flat_preds = all_scores.reshape(-1)
-            if self.rank_loss_type['type'] == 'RankSort' or self.rank_loss_type['type'] == 'BucketedRankSort':
-                pos_weights = all_scores.detach().sigmoid().max(dim=1)[0][pos_idx]
-                bbox_avg_factor = torch.sum(pos_weights)
-                if bbox_avg_factor < 1e-10:
-                    bbox_avg_factor = 1
-
-                loss_bbox = torch.sum(pos_weights*loss_bbox)/bbox_avg_factor
-                IoU_targets = bbox_overlaps(pos_pred.detach(), pos_target, is_aligned=True)
-                flat_labels[flat_labels==1]=IoU_targets
-                ranking_loss, sorting_loss = self.loss_rank.apply(flat_preds, flat_labels)
-                self.SB_weight = (ranking_loss+sorting_loss).detach()/float(loss_bbox.item())
-                loss_bbox *= self.SB_weight
-                weight = self.rank_loss_type['loss_weight']
-                return dict(loss_rpn_rank=self.head_weight*ranking_loss*weight, loss_rpn_sort=self.head_weight*sorting_loss*weight, loss_rpn_bbox=self.head_weight*loss_bbox*weight)
-
-            elif self.rank_loss_type['type'] == 'aLRP':
-                e_loc = loss_bbox.detach()/(2*(1-0.7))
-                losses_cls, rank, order = self.loss_rank.apply(flat_preds, flat_labels, e_loc)
                 
-                # Order the regression losses considering the scores. 
-                ordered_losses_bbox = loss_bbox[order.detach()].flip(dims=[0])
-        
-                # aLRP Regression Component
-                losses_bbox = ((torch.cumsum(ordered_losses_bbox,dim=0)/rank[order.detach()].detach().flip(dims=[0])).mean())
-
-                # Self-balancing
-                self.cls_LRP_hist.append(float(losses_cls.item()))
-                self.reg_LRP_hist.append(float(losses_bbox.item()))
-                self.counter+=1
+            IoU_targets = bbox_overlaps(pos_pred.detach(), pos_target, is_aligned=True)
+            flat_labels[flat_labels==1]=IoU_targets
             
-                if self.counter == self.period:
-                    self.SB_weight = (np.mean(self.reg_LRP_hist)+np.mean(self.cls_LRP_hist))/np.mean(self.reg_LRP_hist)
-                    self.cls_LRP_hist.clear()
-                    self.reg_LRP_hist.clear()
-                    self.counter=0
-                losses_bbox *= self.SB_weight
-                return dict(loss_rpn_cls=self.head_weight*losses_cls, loss_rpn_bbox=self.head_weight*losses_bbox)
+            ranking_loss, sorting_loss = self.loss_rank.apply(flat_preds, flat_labels)
+            ranking_loss = ranking_loss * self.loss_rank_weight
+            sorting_loss = sorting_loss * self.loss_rank_weight
+
+            self.SB_weight = (ranking_loss+sorting_loss).detach()/float(loss_bbox.item())
+            loss_bbox *= self.SB_weight
+            
+            return dict(loss_rpn_rank=self.head_weight*ranking_loss, loss_rpn_sort=self.head_weight*sorting_loss, loss_rpn_bbox=self.head_weight*loss_bbox)
 
         else:
             losses_bbox=torch.cat(all_bbox_preds).sum()*0+1
-            if self.rank_loss_type['type'] == 'RankSort' or self.rank_loss_type['type'] == 'BucketedRankSort':
-                ranking_loss = all_scores.sum()*0+1
-                sorting_loss = all_scores.sum()*0+1
-                weight = self.rank_loss_type['loss_weight']
-                return dict(loss_rpn_rank=self.head_weight*ranking_loss*weight, loss_rpn_sort=self.head_weight*sorting_loss*weight, loss_rpn_bbox=self.head_weight*losses_bbox*weight)
-            else:
-                losses_cls = all_scores.sum()*0+1
-                return dict(loss_rpn_cls=self.head_weight*losses_cls, loss_rpn_bbox=self.head_weight*losses_bbox)
+            ranking_loss = all_scores.sum()*0+1
+            sorting_loss = all_scores.sum()*0+1
+            weight = self.loss_rank_weight
+            return dict(loss_rpn_rank=self.head_weight*ranking_loss*weight, loss_rpn_sort=self.head_weight*sorting_loss*weight, loss_rpn_bbox=self.head_weight*losses_bbox*weight)
+           
 
     def delta2bbox(self, deltas, means=[0., 0., 0., 0.], stds=[0.1, 0.1, 0.2, 0.2], max_shape=None, wh_ratio_clip=16/1000):
 
@@ -309,6 +274,6 @@ class RankBasedRPNHead(RPNTestMixin, AnchorHead):
                 ids = ids[valid_inds]
 
         # TODO: remove the hard coded nms type
-        nms_cfg = dict(type='nms', iou_threshold=cfg.nms_thr)
+        nms_cfg = dict(type='nms', iou_threshold=cfg.nms.iou_threshold)
         dets, keep = batched_nms(proposals, scores, ids, nms_cfg)
-        return dets[:cfg.nms_post]
+        return dets[:cfg.max_per_img]

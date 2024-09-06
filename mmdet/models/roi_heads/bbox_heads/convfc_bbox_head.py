@@ -240,7 +240,7 @@ class Shared4Conv1FCBBoxHead(ConvFCBBoxHead):
 class RankBasedShared2FCBBoxHead(ConvFCBBoxHead):
 
     def __init__(self, fc_out_channels=1024, rank_loss_type = dict(
-                type='RankSort', loss_weight=5.0), *args, **kwargs):
+                type='BucketedRankSort', loss_weight=1.0), *args, **kwargs):
         super(RankBasedShared2FCBBoxHead, self).__init__(
             num_shared_convs=0,
             num_shared_fcs=2,
@@ -252,18 +252,10 @@ class RankBasedShared2FCBBoxHead(ConvFCBBoxHead):
             *args,
             **kwargs)
         self.fc_cls = nn.Linear(self.cls_last_dim, self.num_classes)
-        self.rank_loss_type = rank_loss_type
-        if self.rank_loss_type['type'] == 'RankSort':
-            self.loss_rank = build_loss(rank_loss_type)
-        elif self.rank_loss_type['type'] == 'BucketedRankSort':
-            self.loss_rank = build_loss(rank_loss_type)
-        elif self.rank_loss_type['type'] == 'aLRP':
-            self.loss_rank = build_loss(rank_loss_type)
-            self.SB_weight = 50
-            self.period = 7330
-            self.cls_LRP_hist = collections.deque(maxlen=self.period)
-            self.reg_LRP_hist = collections.deque(maxlen=self.period)
-            self.counter = 0
+        self.rank_loss_type = rank_loss_type['type']
+        self.rank_loss_weight = rank_loss_type['loss_weight']
+        self.loss_rank = build_loss(rank_loss_type)
+
 
     @force_fp32(apply_to=('cls_score', 'bbox_pred'))
     def loss(self,
@@ -295,68 +287,41 @@ class RankBasedShared2FCBBoxHead(ConvFCBBoxHead):
                         4)[pos_inds,labels[pos_inds]]
 
                 loss_bbox = self.loss_bbox(pos_bbox_pred, pos_target)
+                bbox_weights = cls_score.detach().sigmoid().max(dim=1)[0][pos_inds]
 
-                if self.rank_loss_type['type'] == 'RankSort' or self.rank_loss_type['type'] == 'BucketedRankSort':
-                    bbox_weights = cls_score.detach().sigmoid().max(dim=1)[0][pos_inds]
+                IoU_targets = bbox_overlaps(pos_bbox_pred.detach(), pos_target, is_aligned=True)
+                flat_labels[flat_labels==1] = IoU_targets
 
-                    IoU_targets = bbox_overlaps(pos_bbox_pred.detach(), pos_target, is_aligned=True)
-                    flat_labels[flat_labels==1] = IoU_targets
+                ranking_loss, sorting_loss = self.loss_rank.apply(flat_preds, flat_labels)
+                ranking_loss = ranking_loss * self.rank_loss_weight
+                sorting_loss = sorting_loss * self.rank_loss_weight
 
-                    ranking_loss, sorting_loss = self.loss_rank.apply(flat_preds, flat_labels)
-
-                    bbox_avg_factor = torch.sum(bbox_weights)
-                    if bbox_avg_factor < 1e-10:
-                        bbox_avg_factor = 1
-                
-                    losses_bbox = torch.sum(bbox_weights*loss_bbox)/bbox_avg_factor
-                    self.SB_weight = (ranking_loss+sorting_loss).detach()/float(losses_bbox.item())
-                    losses_bbox *= self.SB_weight
-                    weight = self.rank_loss_type['loss_weight']
-                    return dict(loss_roi_rank=ranking_loss*weight, loss_roi_sort=sorting_loss*weight, loss_roi_bbox=losses_bbox*weight), bbox_weights
-
-                elif self.rank_loss_type['type'] == 'aLRP':
-                    losses_cls, rank, order = self.loss_rank.apply(flat_preds, flat_labels, loss_bbox.detach())
-                    
-                    # Order the regression losses considering the scores. 
-                    ordered_losses_bbox = loss_bbox[order.detach()].flip(dims=[0])
+                bbox_avg_factor = torch.sum(bbox_weights)
+                if bbox_avg_factor < 1e-10:
+                    bbox_avg_factor = 1
             
-                    # aLRP Regression Component
-                    losses_bbox = ((torch.cumsum(ordered_losses_bbox,dim=0)/rank[order.detach()].detach().flip(dims=[0])).mean())
+                losses_bbox = torch.sum(bbox_weights*loss_bbox)/bbox_avg_factor
+                self.SB_weight = (ranking_loss+sorting_loss).detach()/float(losses_bbox.item())
+                losses_bbox *= self.SB_weight
 
-                    # Self-balancing
-                    self.cls_LRP_hist.append(float(losses_cls.item()))
-                    self.reg_LRP_hist.append(float(losses_bbox.item()))
-                    self.counter+=1
-                
-                    if self.counter == self.period:
-                        self.SB_weight = (np.mean(self.reg_LRP_hist)+np.mean(self.cls_LRP_hist))/np.mean(self.reg_LRP_hist)
-                        self.cls_LRP_hist.clear()
-                        self.reg_LRP_hist.clear()
-                        self.counter=0
-                    losses_bbox *= self.SB_weight
+                return dict(loss_roi_rank=ranking_loss, loss_roi_sort=sorting_loss, loss_roi_bbox=losses_bbox), bbox_weights
 
-                    return dict(loss_cls=losses_cls, loss_bbox=losses_bbox), None
+               
             else:
                 losses_bbox=bbox_pred.sum()*0+1
-                if self.rank_loss_type['type'] == 'RankSort' or self.rank_loss_type['type'] == 'BucketedRankSort':
-                    ranking_loss = cls_score.sum()*0+1
-                    sorting_loss = cls_score.sum()*0+1
-                    weight = self.rank_loss_type['loss_weight']
-                    return dict(loss_roi_rank=ranking_loss*weight, loss_roi_sort=sorting_loss*weight, loss_roi_bbox=losses_bbox* weight), bbox_weights
-                else:
-                    losses_cls = cls_score.sum()*0+1
-                    return dict(loss_cls=losses_cls, loss_bbox=losses_bbox), None
+                ranking_loss = cls_score.sum()*0+1
+                sorting_loss = cls_score.sum()*0+1
+                weight = self.rank_loss_weight
+                return dict(loss_roi_rank=ranking_loss*weight, loss_roi_sort=sorting_loss*weight, loss_roi_bbox=losses_bbox* weight), bbox_weights
+                
 
         else:
             losses_bbox=bbox_pred.sum()*0+1
-            if self.rank_loss_type['type'] == 'RankSort' or self.rank_loss_type['type'] == 'BucketedRankSort':
-                ranking_loss = cls_score.sum()*0+1
-                sorting_loss = cls_score.sum()*0+1
-                weight = self.rank_loss_type['loss_weight']
-                return dict(loss_roi_rank=ranking_loss*weight, loss_roi_sort=sorting_loss*weight, loss_roi_bbox=losses_bbox*weight), bbox_weights
-            else:
-                losses_cls = cls_score.sum()*0+1
-                return dict(loss_cls=losses_cls, loss_bbox=losses_bbox), None
+            ranking_loss = cls_score.sum()*0+1
+            sorting_loss = cls_score.sum()*0+1
+            weight = self.rank_loss_weight
+            return dict(loss_roi_rank=ranking_loss*weight, loss_roi_sort=sorting_loss*weight, loss_roi_bbox=losses_bbox*weight), bbox_weights
+
 
     @force_fp32(apply_to=('cls_score', 'bbox_pred'))
     def get_bboxes(self,

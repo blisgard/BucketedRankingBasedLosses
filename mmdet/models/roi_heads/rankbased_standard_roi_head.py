@@ -62,32 +62,6 @@ class RankBasedStandardRoIHead(StandardRoIHead):
                                                     img_metas)
             losses.update(bbox_results['loss_bbox'])
 
-            bbox_targets = bbox_results['bbox_targets']
-            num_imgs = len(img_metas)
-            max_proposal = 2000
-            for res in sampling_results:
-                max_proposal =  min(max_proposal, res.bboxes.shape[0])
-            ori_coords = bbox2roi([res.bboxes for res in sampling_results])
-            ori_proposals, ori_labels, ori_bbox_targets, ori_bbox_feats = [], [], [], []
-            for i in range(num_imgs):
-                idx = (ori_coords[:,0]==i).nonzero().squeeze(1)
-                idx = idx[:max_proposal]
-                ori_proposal = ori_coords[idx][:, 1:].unsqueeze(0)
-                ori_label = bbox_targets[0][idx].unsqueeze(0)
-                ori_bbox_target = bbox_targets[2][idx].unsqueeze(0)
-                ori_bbox_feat = bbox_results['bbox_feats'].mean(-1).mean(-1)
-                ori_bbox_feat = ori_bbox_feat[idx].unsqueeze(0)
-                ori_proposals.append(ori_proposal) 
-                ori_labels.append(ori_label)
-                ori_bbox_targets.append(ori_bbox_target)
-                ori_bbox_feats.append(ori_bbox_feat)
-            ori_coords = torch.cat(ori_proposals, dim=0)
-            ori_labels = torch.cat(ori_labels, dim=0)
-            ori_bbox_targets = torch.cat(ori_bbox_targets, dim=0)
-            ori_bbox_feats = torch.cat(ori_bbox_feats, dim=0)
-            pos_coords = (ori_coords, ori_labels, ori_bbox_targets, ori_bbox_feats, 'rcnn')
-            losses.update(pos_coords=pos_coords)
-
         # mask head forward and loss
         if self.with_mask:
             cls_loss_val = bbox_results['loss_bbox']['loss_roi_rank'].detach()+bbox_results['loss_bbox']['loss_roi_sort'].detach()
@@ -106,8 +80,6 @@ class RankBasedStandardRoIHead(StandardRoIHead):
         """Run forward function and calculate loss for box head in training."""
         rois = bbox2roi([res.bboxes for res in sampling_results])
         bbox_results = self._bbox_forward(x, rois)
-        
-
         
         bbox_targets = self.bbox_head.get_targets(sampling_results, gt_bboxes,
                                                   gt_labels, self.train_cfg)
