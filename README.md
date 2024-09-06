@@ -18,6 +18,8 @@ The official implementation of Bucketed Ranking-based Losses. Our implementation
   <img src="figures/ranking_comparison_2.png" width="600">
 </p>
 
+**BRS-DETR: Efficient and Robust Transformer-Based Object Detection with Bucketed Ranking-Based Losses** BRS-DETR integrates Bucketed Ranking-Based Loss (BRS Loss) into Co-DETR, delivering superior performance and training efficiency on the COCO benchmark. (i) BRS-DETR achieves a 0.8 AP improvement on ResNet-50 and consistent gains across other transformer-based backbones. (ii) BRS-DETR provides faster training: cuts training time by 6×, optimizing the handling of positive examples and loss calculation of auxillary heads.
+
 **Benefits of BR Loss on Efficiency and Simplification of Training.** With BR Loss, we achieve significant improvements in training efficiency: (i) The bucketed approach reduces the time complexity to O(max(N log(N),P²)), allowing faster training, (ii) BR Loss maintains the simplicity and robustness of ranking-based approaches without requiring complex sampling heuristics or additional auxiliary heads, and (iii) it enables efficient training of large-scale object detectors, including transformer-based models, with minimal tuning.
 
 **Benefits of BR Loss on Improving Performance.** Using BR Loss, we train seven diverse visual detectors and demonstrate consistent performance improvements: (i) BR Loss accelerates training by 2× on average while preserving the accuracy of unbucketed versions, (ii) For the first time, we successfully train transformer-based detectors like CoDETR using ranking-based losses, consistently outperforming their original configurations across multiple backbones.
