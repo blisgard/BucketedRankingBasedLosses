@@ -87,9 +87,8 @@ class RankBasedStandardRoIHead(StandardRoIHead):
                                         bbox_results['bbox_pred'], rois,
                                         *bbox_targets)
         
-        bbox_targets = (bbox_targets[0], bbox_targets[1], bbox_targets[2], bbox_weights)
         bbox_results.update(loss_bbox=loss_bbox)
-        bbox_results.update(bbox_targets=bbox_targets)
+        bbox_results.update(bbox_weights=bbox_weights)
         return bbox_results
 
     def _mask_forward_train(self, x, sampling_results, bbox_feats, bbox_weights, cls_loss_val,
