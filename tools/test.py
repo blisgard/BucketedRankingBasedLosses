@@ -255,7 +255,6 @@ def main():
             mmcv.dump(outputs, args.out)
         kwargs = {} if args.eval_options is None else args.eval_options
         if args.format_only:
-            print("here:", dataset.format_results)
             dataset.format_results(outputs, **kwargs)
         if args.eval:
             eval_kwargs = cfg.get('evaluation', {}).copy()
@@ -267,7 +266,6 @@ def main():
                 eval_kwargs.pop(key, None)
             eval_kwargs.update(dict(metric=args.eval, **kwargs))
             metric = dataset.evaluate(outputs, **eval_kwargs)
-            print(metric)
             metric_dict = dict(config=args.config, metric=metric)
             if args.work_dir is not None and rank == 0:
                 mmcv.dump(metric_dict, json_file)

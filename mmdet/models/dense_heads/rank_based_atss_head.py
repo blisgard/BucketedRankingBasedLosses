@@ -62,11 +62,15 @@ class RankBasedATSSHead(AnchorHead):
             self.cls_LRP_hist = collections.deque(maxlen=self.period)
             self.reg_LRP_hist = collections.deque(maxlen=self.period)
             self.tau = 0.50
-        elif rank_loss_type == 'AP':
+        elif rank_loss_type == 'APLoss':
             self.loss_rank = ranking_losses.APLoss()
+        elif rank_loss_type == 'BucketedAP':
+            self.loss_rank = ranking_losses.BucketedAPLoss()
+        elif rank_loss_type == 'DRLoss':
+            self.loss_rank = build_loss(dict(type='SigmoidDRLoss'))
 
         self.rank_loss_type = rank_loss_type
-
+        self.loc_weight = 2.0
     def _init_layers(self):
         """Initialize layers of the head."""
         self.relu = nn.ReLU(inplace=True)
@@ -229,10 +233,11 @@ class RankBasedATSSHead(AnchorHead):
             pos_bbox_pred = torch.cat(all_bbox_preds)[pos_inds]
             pos_anchors = torch.cat(all_anchors)[pos_inds]
             bbox_weights = (all_cls_scores.detach().sigmoid().max(dim=1)[0][pos_inds])
+ 
 
             pos_decode_bbox_pred = self.bbox_coder.decode(
                 pos_anchors, pos_bbox_pred)
-            
+
             pos_decode_bbox_targets = self.bbox_coder.decode(
                 pos_anchors, pos_bbox_targets)
 
@@ -240,31 +245,53 @@ class RankBasedATSSHead(AnchorHead):
             loss_bbox = self.loss_bbox(
                 pos_decode_bbox_pred,
                 pos_decode_bbox_targets) 
-
             # classification component
             flat_labels = vectorize_labels(cls_labels, self.num_classes, torch.cat(all_label_weights))
             flat_preds = all_cls_scores.reshape(-1)
             IoU_targets = bbox_overlaps(pos_decode_bbox_pred.detach(), pos_decode_bbox_targets, is_aligned=True)
-            flat_labels[flat_labels==1]=IoU_targets
-
-            ranking_loss, sorting_loss = self.loss_rank.apply(flat_preds, flat_labels, self.delta)
             
-            bbox_avg_factor = torch.sum(bbox_weights)
-            if bbox_avg_factor < EPS:
-                bbox_avg_factor = 1
+
+            if self.rank_loss_type == 'RankSort' or self.rank_loss_type == 'BucketedRankSort':
+                flat_labels[flat_labels==1]=IoU_targets
+                ranking_loss, sorting_loss = self.loss_rank.apply(flat_preds, flat_labels, self.delta)
                 
-            losses_bbox = torch.sum(bbox_weights*loss_bbox)/bbox_avg_factor
+                bbox_avg_factor = torch.sum(bbox_weights)
+                if bbox_avg_factor < EPS:
+                    bbox_avg_factor = 1
+                    
+                losses_bbox = torch.sum(bbox_weights*loss_bbox)/bbox_avg_factor
+                self.SB_weight = (ranking_loss+sorting_loss).detach()/float(losses_bbox.item())
+                losses_bbox *= self.SB_weight
 
-            self.SB_weight = (ranking_loss+sorting_loss).detach()/float(losses_bbox.item())
-            losses_bbox *= self.SB_weight
+                return dict(loss_rank=ranking_loss, loss_sort=sorting_loss, loss_bbox=losses_bbox)
+            elif self.rank_loss_type == 'APLoss' or self.rank_loss_type == 'BucketedAP' or self.rank_loss_type == 'aLRP':
+                losses_cls = self.loss_rank.apply(flat_preds, flat_labels, 1.0)
+                bbox_avg_factor = torch.sum(bbox_weights)
+                if bbox_avg_factor < EPS:
+                    bbox_avg_factor = 1
+                bbox_weights *= self.loc_weight
+                losses_bbox = torch.sum(bbox_weights*loss_bbox)/bbox_avg_factor
 
-            return dict(loss_rank=ranking_loss, loss_sort=sorting_loss, loss_bbox=losses_bbox)
+                return dict(loss_rank=losses_cls, loss_bbox=losses_bbox)
+            elif self.rank_loss_type == 'DRLoss':
+                losses_cls = self.loss_rank(all_cls_scores, cls_labels)
+                bbox_avg_factor = torch.sum(bbox_weights)
+                if bbox_avg_factor < EPS:
+                    bbox_avg_factor = 1
+                    
+                losses_bbox = torch.sum(bbox_weights*loss_bbox)/bbox_avg_factor
+                return dict(loss_rank=losses_cls, loss_bbox=losses_bbox)
               
         else:
+
             losses_bbox = torch.cat(bbox_preds).sum() * 0
-            ranking_loss = torch.cat(cls_scores).sum() * 0
-            sorting_loss = torch.cat(cls_scores).sum() * 0
-            return dict(loss_rank=ranking_loss, loss_sort=sorting_loss, loss_bbox=losses_bbox)
+            if self.rank_loss_type ==  'RankSort' or self.rank_loss_type=='BucketedRankSort':
+                ranking_loss = torch.cat(cls_scores).sum() * 0
+                sorting_loss = torch.cat(cls_scores).sum() * 0
+                return dict(loss_rank=ranking_loss, loss_sort=sorting_loss, loss_bbox=losses_bbox)
+        
+            losses_cls = all_cls_scores.sum() * 0
+            return dict(loss_rank=losses_cls, loss_bbox=losses_bbox)
             
     def centerness_target(self, anchors, bbox_targets):
         # only calculate pos centerness targets, otherwise there may be nan

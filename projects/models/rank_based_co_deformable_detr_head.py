@@ -329,6 +329,7 @@ class RankBasedCoDeformDETRHead(DETRHead):
             bbox_targets = bbox_targets.reshape(num_imgs * num_q, 4)
             bbox_weights = bbox_weights.reshape(num_imgs * num_q, 4)
         except:
+            print("here")
             #return cls_scores.mean()*0, cls_scores.mean()*0, cls_scores.mean()*0, cls_scores.mean()*0
             return cls_scores.mean()*0, cls_scores.mean()*0, cls_scores.mean()*0
 
@@ -865,7 +866,7 @@ class RankBasedCoDeformDETRHead(DETRHead):
         bg_class_ind = self.num_classes
         num_total_pos = len(((labels >= 0) & (labels < bg_class_ind)).nonzero().squeeze(1))
         pos_inds = ((labels >= 0) & (labels < bg_class_ind)).nonzero().squeeze(1)
-
+        
         # construct factors used for rescale bboxes
         factors = []
         for img_meta, bbox_pred in zip(img_metas, bbox_preds):
@@ -905,17 +906,16 @@ class RankBasedCoDeformDETRHead(DETRHead):
         # regression L1 loss
         loss_bbox = self.loss_bbox(
             bbox_preds, bbox_targets, bbox_weights, avg_factor=num_total_pos)
-        
+        if num_total_pos == 0:
+            return cls_scores.mean()*0, cls_scores.mean()*0, cls_scores.mean()*0, cls_scores.mean()*0   
         bbox_avg_factor = torch.sum(bbox_weights)
         if bbox_avg_factor < EPS:
             bbox_avg_factor = 1
-            
-        losses_bbox = torch.sum(bbox_weights*loss_bbox)/bbox_avg_factor
 
+        losses_bbox = torch.sum(bbox_weights*loss_bbox)/bbox_avg_factor
         if float(losses_bbox.item()) != 0:
             self.SB_weight = (ranking_loss+sorting_loss).detach()/float(losses_bbox.item())
             losses_bbox *= self.SB_weight
- 
         # regression IoU loss, defaultly GIoU loss
 
         loss_iou = self.loss_iou(

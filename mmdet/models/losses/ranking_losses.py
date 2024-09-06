@@ -9,7 +9,6 @@ class BucketedRankSort(torch.autograd.Function):
     def forward(ctx, logits, targets,delta_RS=0.5): 
         
         grad = torch.zeros(targets.shape).to(logits.device)
-        metric = torch.zeros(0).to(logits.device)
         
         #Store the original indices of logits and targets
         old_targets = targets
@@ -18,7 +17,7 @@ class BucketedRankSort(torch.autograd.Function):
         #If no positive logit, return zero loss
         if len(p_indices) == 0:
             ctx.save_for_backward(grad)
-            return torch.zeros(1).to(logits.device), torch.zeros(1).to(logits.device)
+            return logits.sum()*0., logits.sum()*0.
 
         p_and_n_indices = torch.cat((p_indices, n_indices))
         p_and_n_logits = logits[p_and_n_indices]
@@ -45,7 +44,7 @@ class BucketedRankSort(torch.autograd.Function):
         #If no relevant targets, return zero loss
         if len(relevant_targets) == 0 or len(relevant_f_indices) == 0:
             ctx.save_for_backward(grad)
-            return torch.zeros(0).to(logits.device), torch.zeros(1).to(logits.device)
+            return logits.sum()*0., logits.sum()*0.
         
         fg_num = len(f_targets)
 
@@ -76,7 +75,8 @@ class BucketedRankSort(torch.autograd.Function):
             new_targets[indices_s < len(f_logits)] = sorted_p_and_n_targets[sorted_p_and_n_targets != 0]
 
             if torch.max(new_targets) <= 0:
-                return grad, metric
+                ctx.save_for_backward(grad)
+                return logits.sum()*0., logits.sum()*0.
 
             labels_p = (new_targets > 0.)
             allabels_p = torch.nonzero((sorted_p_and_n_targets > 0.)).flatten()
@@ -149,8 +149,6 @@ class BucketedRankSort(torch.autograd.Function):
             #Normalize gradients by number of positives 
             grad /= fg_num
 
-            metric = torch.sum(1 - ranking_error, dim=0) / fg_num
-
             ctx.save_for_backward(grad)
             return ranking_error.mean(), sorting_error.mean()
         
@@ -173,6 +171,7 @@ class BucketedRankSort(torch.autograd.Function):
             target_sorted_order = fg_relations.T * iou_relations
 
             rank_pos_target = torch.sum(target_sorted_order, axis=1)
+            metric = torch.sum(1 - ranking_error, dim=0) / fg_num
 
             target_sorting_error = torch.sum(target_sorted_order * (1 - f_targets), axis=1) / rank_pos_target
             sorting_error = current_sorting_error - target_sorting_error
@@ -190,9 +189,6 @@ class BucketedRankSort(torch.autograd.Function):
 
             #Normalize gradients by number of positives 
             grad /= fg_num
-
-            metric = torch.sum(1 - ranking_error, dim=0) / fg_num
-
             ctx.save_for_backward(grad)
             return ranking_error.mean(), sorting_error.mean()
 
