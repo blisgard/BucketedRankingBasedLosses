@@ -1,8 +1,11 @@
-_base_ = 'ranksort_mask_rcnn+_r50_fpn_1x_coco.py'
+_base_ = 'ranksort_loss_mask_rcnn_r50_fpn_3x_coco.py'
 
-model = dict(pretrained='torchvision://resnet101',
-    backbone=dict(depth=101))
-
+model = dict(
+    backbone=dict(
+        depth=101,
+        init_cfg=dict(type='Pretrained',
+                      checkpoint='torchvision://resnet101')))
+runner = dict(type='EpochBasedRunner', max_epochs=36)
 # learning policy
 lr_config = dict(
     policy='step',
@@ -21,7 +24,8 @@ train_pipeline = [
     dict(type='LoadAnnotations', with_bbox=True, with_mask=True),
     dict(
         type='Resize',
-        img_scale=[(1333, 480), (1333, 560), (1333, 640), (1333, 720), (1333, 800), (1333, 880), (1333, 960)],
+        img_scale=[(1333, 800), (1333, 768), (1333, 736),
+                   (1333, 704), (1333, 672), (1333, 640)],
         multiscale_mode='value',
         keep_ratio=True),
     dict(type='RandomFlip', flip_ratio=0.5),

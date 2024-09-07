@@ -22,7 +22,8 @@ model = dict(
         num_outs=5),
     rpn_head=dict(
         type='RankBasedRPNHead',
-        rank_loss_type = 'BucketedRankSort',
+        rank_loss_type = dict(
+                type='RankSort', loss_weight=1.0),
         in_channels=256,
         feat_channels=256,
         anchor_generator=dict(
@@ -50,7 +51,8 @@ model = dict(
         bbox_head=[
             dict(
                 type='RankBasedShared2FCBBoxHead',
-                rank_loss_type = 'BucketedRankSort',
+                rank_loss_type = dict(
+                type='RankSort', loss_weight=1.0),
                 in_channels=256,
                 fc_out_channels=1024,
                 roi_feat_size=7,
@@ -68,7 +70,8 @@ model = dict(
                 loss_bbox=dict(type='GIoULoss', reduction='none')),
             dict(
                 type='RankBasedShared2FCBBoxHead',
-                rank_loss_type = 'BucketedRankSort',
+                rank_loss_type = dict(
+                type='RankSort', loss_weight=1.0),
                 in_channels=256,
                 fc_out_channels=1024,
                 roi_feat_size=7,
@@ -86,7 +89,8 @@ model = dict(
                 loss_bbox=dict(type='GIoULoss', reduction='none')),
             dict(
                 type='RankBasedShared2FCBBoxHead',
-                rank_loss_type = 'BucketedRankSort',
+                rank_loss_type = dict(
+                type='RankSort', loss_weight=1.0),
                 in_channels=256,
                 fc_out_channels=1024,
                 roi_feat_size=7,
@@ -102,7 +106,7 @@ model = dict(
                     loss_weight=1.0),
                 reg_decoded_bbox= True,
                 loss_bbox=dict(type='GIoULoss', reduction='none'))
-        ]))
+        ]),
 
 # model training and testing settings
 train_cfg = dict(
@@ -179,7 +183,7 @@ train_cfg = dict(
                 add_gt_as_proposals=True),
             pos_weight=-1,
             debug=False)
-    ])
+    ]),
 
 test_cfg = dict(
     rpn=dict(
@@ -192,7 +196,7 @@ test_cfg = dict(
     rcnn=dict(
         score_thr=0.40,
         nms=dict(type='nms', iou_threshold=0.5),
-        max_per_img=100))
+        max_per_img=100)))
 
 data = dict(
     samples_per_gpu=4,

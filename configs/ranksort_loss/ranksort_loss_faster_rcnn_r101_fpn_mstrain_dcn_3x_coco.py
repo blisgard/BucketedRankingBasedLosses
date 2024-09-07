@@ -1,7 +1,10 @@
-_base_ = 'ranksort_mask_rcnn_r50_fpn_1x_coco.py'
+_base_ = 'ranksort_loss_faster_rcnn_r101_fpn_3x_coco.py'
 
-model = dict(pretrained='torchvision://resnet101',
-    backbone=dict(depth=101))
+model = dict(
+    backbone=dict(
+        dcn=dict(type='DCNv2', deform_groups=4, fallback_on_stride=False),
+        stage_with_dcn=(False, True, True, True)))
+runner = dict(type='EpochBasedRunner', max_epochs=36)
 
 # learning policy
 lr_config = dict(
@@ -18,18 +21,17 @@ img_norm_cfg = dict(
 
 train_pipeline = [
     dict(type='LoadImageFromFile'),
-    dict(type='LoadAnnotations', with_bbox=True, with_mask=True),
+    dict(type='LoadAnnotations', with_bbox=True),
     dict(
         type='Resize',
-        img_scale=[(1333, 800), (1333, 768), (1333, 736),
-                   (1333, 704), (1333, 672), (1333, 640)],
+        img_scale=[(1333, 480), (1333, 560), (1333, 640), (1333, 720), (1333, 800), (1333, 880), (1333, 960)],
         multiscale_mode='value',
         keep_ratio=True),
     dict(type='RandomFlip', flip_ratio=0.5),
     dict(type='Normalize', **img_norm_cfg),
     dict(type='Pad', size_divisor=32),
     dict(type='DefaultFormatBundle'),
-    dict(type='Collect', keys=['img', 'gt_bboxes', 'gt_labels', 'gt_masks']),
+    dict(type='Collect', keys=['img', 'gt_bboxes', 'gt_labels']),
 ]
 test_pipeline = [
     dict(type='LoadImageFromFile'),
@@ -47,7 +49,7 @@ test_pipeline = [
         ])
 ]
 data = dict(
-    samples_per_gpu=4, 
+    samples_per_gpu=4,
     workers_per_gpu=4,
     train=dict(pipeline=train_pipeline),
     val=dict(pipeline=test_pipeline),
