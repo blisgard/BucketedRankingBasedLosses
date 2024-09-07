@@ -254,6 +254,9 @@ class RankBasedATSSHead(AnchorHead):
             elif self.rank_loss_type == 'APLoss' or self.rank_loss_type == 'BucketedAPLoss':
                 
                 losses_cls = self.loss_rank.apply(flat_preds, flat_labels, 1.0)
+                bbox_weights *= self.loc_weight
+                losses_bbox = torch.sum(bbox_weights*loss_bbox)/bbox_avg_factor
+
                 return dict(loss_rank=losses_cls, loss_bbox=losses_bbox)        
               
         else:

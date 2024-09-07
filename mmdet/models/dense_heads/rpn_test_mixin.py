@@ -17,7 +17,6 @@ class RPNTestMixin(object):
                     __name__, 'rpn_head_forward',
                     sleep_interval=sleep_interval):
                 rpn_outs = self(x)
-
             proposal_list = self.get_bboxes(*rpn_outs, img_metas)
             return proposal_list
 
@@ -33,7 +32,7 @@ class RPNTestMixin(object):
             list[Tensor]: Proposals of each image.
         """
         rpn_outs = self(x)
-        proposal_list = self.get_bboxes(*rpn_outs, img_metas)
+        proposal_list = self.get_bboxes(*rpn_outs, img_metas=img_metas)
         return proposal_list
 
     def aug_test_rpn(self, feats, img_metas):

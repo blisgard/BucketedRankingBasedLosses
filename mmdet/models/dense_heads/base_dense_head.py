@@ -71,7 +71,6 @@ class BaseDenseHead(BaseModule, metaclass=ABCMeta):
                 the corresponding box.
         """
         assert len(cls_scores) == len(bbox_preds)
-
         if score_factors is None:
             # e.g. Retina, FreeAnchor, Foveabox, etc.
             with_score_factors = False
@@ -335,6 +334,7 @@ class BaseDenseHead(BaseModule, metaclass=ABCMeta):
         if proposal_cfg is None:
             return losses
         else:
+            
             proposal_list = self.get_bboxes(
                 *outs, img_metas=img_metas, cfg=proposal_cfg)
             return losses, proposal_list

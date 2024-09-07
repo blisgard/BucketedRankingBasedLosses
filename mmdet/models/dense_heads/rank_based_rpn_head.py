@@ -52,15 +52,7 @@ class RankBasedRPNHead(RPNTestMixin, AnchorHead):
         rpn_cls_score = self.rpn_cls(x)
         rpn_bbox_pred = self.rpn_reg(x)
         return rpn_cls_score, rpn_bbox_pred
-    '''
 
-    def flatten_labels(self, flat_labels, label_weights):
-        prediction_number = flat_labels.shape[0]
-        labels = torch.zeros( [prediction_number], device=flat_labels.device)
-        labels[flat_labels == 0] = 1.
-        labels[label_weights == 0] = -1.
-        return labels.reshape(-1)
-    '''
     def loss(self,
              cls_scores,
              bbox_preds,
