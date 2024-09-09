@@ -479,7 +479,7 @@ class BucketedAPLoss(torch.autograd.Function):
             torch.mul(multiplication_bg, ranking_error) / FP_num,
             axis=1) / bucket_sizes_b.flatten())
 
-        duplication_bg = bucket_grads.repeat_interleave(bucket_sizes_b.flatten().type(torch.LongTensor).cuda())
+        duplication_bg = bucket_grads.repeat_interleave(bucket_sizes_b.flatten().type(torch.LongTensor).to(logits.device))
 
         duplication_fg = ranking_error
 

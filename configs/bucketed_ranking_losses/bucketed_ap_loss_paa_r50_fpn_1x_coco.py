@@ -47,7 +47,7 @@ model = dict(
             alpha=0.25,
             loss_weight=1.0),
         loss_bbox=dict(type='GIoULoss', reduction='none'),
-        rank_loss_type = 'RankSort'))
+        rank_loss_type = 'BucketedAPLoss'))
 # training and testing settings
 train_cfg = dict(
     assigner=dict(

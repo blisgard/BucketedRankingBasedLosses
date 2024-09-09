@@ -3,7 +3,7 @@ _base_ = [
     '../_base_/schedules/schedule_1x.py', '../_base_/default_runtime.py'
 ]
 model = dict(
-    type='PAA',
+    type='ATSS',
     pretrained='torchvision://resnet50',
     backbone=dict(
         type='ResNet',
@@ -22,10 +22,7 @@ model = dict(
         add_extra_convs='on_output',
         num_outs=5),
     bbox_head=dict(
-        type='RankBasedPAAHead',
-        reg_decoded_bbox=True,
-        score_voting=True,
-        topk=9,
+        type='RankBasedATSSHead',
         num_classes=80,
         in_channels=256,
         stacked_convs=4,
@@ -40,22 +37,11 @@ model = dict(
             type='DeltaXYWHBBoxCoder',
             target_means=[.0, .0, .0, .0],
             target_stds=[0.1, 0.1, 0.2, 0.2]),
-        loss_cls=dict(
-            type='FocalLoss',
-            use_sigmoid=True,
-            gamma=2.0,
-            alpha=0.25,
-            loss_weight=1.0),
         loss_bbox=dict(type='GIoULoss', reduction='none'),
-        rank_loss_type = 'RankSort'))
+        rank_loss_type = 'BucketedRankSort'))
 # training and testing settings
 train_cfg = dict(
-    assigner=dict(
-        type='MaxIoUAssigner',
-        pos_iou_thr=0.1,
-        neg_iou_thr=0.1,
-        min_pos_iou=0,
-        ignore_iof_thr=-1),
+    assigner=dict(type='ATSSAssigner', topk=9),
     allowed_border=-1,
     pos_weight=-1,
     debug=False)
@@ -70,4 +56,5 @@ data = dict(
     samples_per_gpu=4,
     workers_per_gpu=4)
 
+# optimizer
 optimizer = dict(type='SGD', lr=0.008, momentum=0.9, weight_decay=0.0001)
