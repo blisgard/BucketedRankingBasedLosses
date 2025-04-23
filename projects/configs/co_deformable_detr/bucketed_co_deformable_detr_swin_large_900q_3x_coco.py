@@ -1,5 +1,5 @@
 _base_ = [
-    'bucketed_co_deformable_detr_r50_1x_coco_assigner_weight_4_step_10_11_divide_5.py'
+    'bucketed_co_deformable_detr_r50_1x_coco.py'
 ]
 pretrained = 'models/swin_large_patch4_window12_384_22k.pth'
 # model settings

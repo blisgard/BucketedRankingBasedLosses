@@ -1,5 +1,5 @@
 _base_ = [
-    'bucketed_co_deformable_detr_r50_1x_coco_iou_lr_2e-4_step_10_11_divide_5_no_self_weight_fixed_seed_1187060654_16072024.py'
+    'bucketed_co_deformable_detr_r50_1x_coco.py'
 ]
 pretrained = 'models/swin_large_patch4_window12_384_22k.pth'
 # model settings
