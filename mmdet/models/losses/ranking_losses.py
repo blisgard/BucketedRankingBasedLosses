@@ -91,9 +91,9 @@ class BucketedRankSort(torch.autograd.Function):
 
             valid_bg_logits = all_buckets[valid_labels_n]
 
-            bg_relations = (valid_bg_logits[:, None] - fg_logits[None, :]).cuda()
+            bg_relations = (valid_bg_logits[:, None] - fg_logits[None, :]).to(logits.device)
 
-            fg_relations = (fg_logits[:, None] - fg_logits[None, :]).cuda()
+            fg_relations = (fg_logits[:, None] - fg_logits[None, :]).to(logits.device)
             if delta_RS > 0:
                 fg_relations = torch.clamp(fg_relations / (2 * delta_RS) + 0.5, min=0, max=1)
                 bg_relations = torch.clamp(bg_relations / (2 * delta_RS) + 0.5, min=0, max=1)
@@ -131,12 +131,12 @@ class BucketedRankSort(torch.autograd.Function):
                 torch.mul(multiplication_bg, ranking_error) / FP_num,
                 axis=1) / bucket_sizes_b.flatten())
 
-            duplication_bg = bucket_grads.repeat_interleave(bucket_sizes_b.flatten().type(torch.LongTensor).cuda())
+            duplication_bg = bucket_grads.repeat_interleave(bucket_sizes_b.flatten().type(torch.LongTensor).to(logits.device))
 
             duplication_fg = ranking_error
 
             #Distribute grads into their original positions
-            grad[p_and_n_indices[sorted_p_and_n_indices[:irrelevant_b_index][labels_n]]] = duplication_bg.cuda()
+            grad[p_and_n_indices[sorted_p_and_n_indices[:irrelevant_b_index][labels_n]]] = duplication_bg.to(logits.device)
             grad[p_and_n_indices[sorted_p_and_n_indices[allabels_p]]] = -duplication_fg
 
             grad[p_and_n_indices[sorted_p_and_n_indices[allabels_p]]] -= sorting_error * (sorting_pmf_denom != 0.)
@@ -370,6 +370,7 @@ class aLRPLoss(torch.autograd.Function):
         g1, =ctx.saved_tensors
         return g1*out_grad1, None, None, None, None
 
+@LOSSES.register_module()
 class BucketedAPLoss(torch.autograd.Function):
     @staticmethod
     def forward(ctx, logits, targets, delta=1.):
@@ -455,9 +456,9 @@ class BucketedAPLoss(torch.autograd.Function):
 
         valid_bg_logits = all_buckets[valid_labels_n]
 
-        bg_relations = (valid_bg_logits[:, None] - fg_logits[None, :]).cuda()
+        bg_relations = (valid_bg_logits[:, None] - fg_logits[None, :]).to(logits.device)
 
-        fg_relations = (fg_logits[:, None] - fg_logits[None, :]).cuda()
+        fg_relations = (fg_logits[:, None] - fg_logits[None, :]).to(logits.device)
         if delta > 0:
             fg_relations = torch.clamp(fg_relations / (2 * delta) + 0.5, min=0, max=1)
             bg_relations = torch.clamp(bg_relations / (2 * delta) + 0.5, min=0, max=1)
@@ -484,7 +485,7 @@ class BucketedAPLoss(torch.autograd.Function):
         duplication_fg = ranking_error
 
         #Distribute grads into their original positions
-        grad[p_and_n_indices[sorted_p_and_n_indices[:irrelevant_b_index][labels_n]]] = duplication_bg.cuda()
+        grad[p_and_n_indices[sorted_p_and_n_indices[:irrelevant_b_index][labels_n]]] = duplication_bg.to(logits.device)
         grad[p_and_n_indices[sorted_p_and_n_indices[allabels_p]]] = -duplication_fg
 
         #Normalize gradients by number of positives 

@@ -11,6 +11,8 @@ from .qfl_head import QFLHead
 from .rank_based_atss_head import RankBasedATSSHead
 from .rank_based_rpn_head import RankBasedRPNHead
 from .rank_based_paa_head import RankBasedPAAHead
+from .rank_based_detr_head import RankBasedDETRHead
+from .rank_based_deformable_detr_head import RankBasedDeformableDETRHead
 from .ddod_head import DDODHead
 from .deformable_detr_head import DeformableDETRHead
 from .detr_head import DETRHead
@@ -58,5 +60,5 @@ __all__ = [
     'DETRHead', 'YOLOFHead', 'DeformableDETRHead', 'SOLOHead',
     'DecoupledSOLOHead', 'CenterNetHead', 'YOLOXHead',
     'DecoupledSOLOLightHead', 'LADHead', 'TOODHead', 'MaskFormerHead',
-    'Mask2FormerHead', 'SOLOV2Head', 'DDODHead', 'RankBasedATSSHead', 'QFLHead', 'RankBasedPAAHead', 'RankBasedRPNHead'
+    'Mask2FormerHead', 'SOLOV2Head', 'DDODHead', 'RankBasedATSSHead', 'QFLHead', 'RankBasedPAAHead', 'RankBasedRPNHead', 'RankBasedDETRHead','RankBasedDeformableDETRHead'
 ]
